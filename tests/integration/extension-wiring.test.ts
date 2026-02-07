@@ -11,11 +11,11 @@ describe("Extension Wiring - Integration Tests", () => {
   });
 
   describe("Tool Registration", () => {
-    it("registers all 4 tools (spawn_agent, check_agents, check_budget, log_reflection)", () => {
+    it("registers all 6 tools (spawn_agent, check_agents, check_budget, log_reflection, review_agent, merge_agent)", () => {
       orchestrator(mockPi);
 
-      // Verify registerTool was called 4 times
-      expect(mockPi.registerTool).toHaveBeenCalledTimes(4);
+      // Verify registerTool was called 6 times
+      expect(mockPi.registerTool).toHaveBeenCalledTimes(6);
 
       // Extract the registered tool names
       const calls = (mockPi.registerTool as any).mock.calls;
@@ -25,6 +25,8 @@ describe("Extension Wiring - Integration Tests", () => {
       expect(toolNames).toContain("check_agents");
       expect(toolNames).toContain("check_budget");
       expect(toolNames).toContain("log_reflection");
+      expect(toolNames).toContain("review_agent");
+      expect(toolNames).toContain("merge_agent");
     });
 
     it("spawn_agent tool has correct parameter names", () => {
@@ -91,6 +93,30 @@ describe("Extension Wiring - Integration Tests", () => {
       
       expect(params).toHaveProperty("content");
       expect(params).toHaveProperty("type");
+    });
+
+    it("review_agent tool has taskId parameter", () => {
+      orchestrator(mockPi);
+
+      const calls = (mockPi.registerTool as any).mock.calls;
+      const reviewAgentCall = calls.find((call: any) => call[0].name === "review_agent");
+      
+      expect(reviewAgentCall).toBeDefined();
+      const params = reviewAgentCall[0].parameters.properties;
+      
+      expect(params).toHaveProperty("taskId");
+    });
+
+    it("merge_agent tool has taskId parameter", () => {
+      orchestrator(mockPi);
+
+      const calls = (mockPi.registerTool as any).mock.calls;
+      const mergeAgentCall = calls.find((call: any) => call[0].name === "merge_agent");
+      
+      expect(mergeAgentCall).toBeDefined();
+      const params = mergeAgentCall[0].parameters.properties;
+      
+      expect(params).toHaveProperty("taskId");
     });
   });
 
