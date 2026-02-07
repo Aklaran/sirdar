@@ -126,9 +126,9 @@ export class LifecycleManager {
         clearTimeout(timeoutId);
       }
 
-      // 8. Truncate output if needed
+      // 8. Truncate output if needed (keep last N chars, not first N)
       if (outputText.length > MAX_OUTPUT_LENGTH) {
-        outputText = outputText.substring(0, MAX_OUTPUT_LENGTH);
+        outputText = outputText.substring(outputText.length - MAX_OUTPUT_LENGTH);
       }
 
       const durationMs = Date.now() - startTime;
@@ -153,9 +153,9 @@ export class LifecycleManager {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
 
-      // Truncate output if needed
+      // Truncate output if needed (keep last N chars, not first N)
       if (outputText.length > MAX_OUTPUT_LENGTH) {
-        outputText = outputText.substring(0, MAX_OUTPUT_LENGTH);
+        outputText = outputText.substring(outputText.length - MAX_OUTPUT_LENGTH);
       }
 
       return {

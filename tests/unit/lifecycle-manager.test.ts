@@ -439,7 +439,72 @@ describe("LifecycleManager", () => {
       const result = await manager.runTask(task);
 
       expect(result.output.length).toBe(5000);
-      expect(result.output).toBe(longOutput.substring(0, 5000));
+      expect(result.output).toBe(longOutput.substring(longOutput.length - 5000));
+    });
+
+    it("runTask keeps last N characters when output exceeds max length", async () => {
+      // Create output that has "A"s first then "B"s
+      // First 5000 chars are "A"s, last 5000 chars are "B"s = 10000 total
+      // When truncated to 5000 from the END, should keep last 5000 which are all "B"s
+      const longOutput = "A".repeat(5000) + "B".repeat(5000);
+      const mockSession = createMockSession({ outputText: longOutput });
+      const mockCreateSession = createMockSessionFactory(mockSession);
+
+      const manager = new LifecycleManager({
+        createSession: mockCreateSession,
+        authStorage: mockAuthStorage,
+        modelRegistry: mockModelRegistry,
+      });
+
+      const task: TaskDefinition = {
+        id: "test-task",
+        prompt: "Do something",
+        tier: "light",
+        description: "Test task",
+      };
+
+      const result = await manager.runTask(task);
+
+      expect(result.success).toBe(true);
+      expect(result.output.length).toBe(5000);
+      // Should start with "B"s (the last part), not "A"s (the first part)
+      expect(result.output.startsWith("B")).toBe(true);
+      expect(result.output).toBe("B".repeat(5000)); // Last 5000 should be all "B"s
+    });
+
+    it("runTask keeps last N characters on error path too", async () => {
+      // Create a session that fails with long output
+      // First 5000 chars are "A"s, last 5000 chars are "B"s = 10000 total
+      // When truncated to 5000 from the END, should keep last 5000 which are all "B"s
+      const longOutput = "A".repeat(5000) + "B".repeat(5000);
+      const mockSession = createMockSession({
+        outputText: longOutput,
+        shouldThrow: true,
+        errorMessage: "Something went wrong",
+      });
+      const mockCreateSession = createMockSessionFactory(mockSession);
+
+      const manager = new LifecycleManager({
+        createSession: mockCreateSession,
+        authStorage: mockAuthStorage,
+        modelRegistry: mockModelRegistry,
+      });
+
+      const task: TaskDefinition = {
+        id: "test-task",
+        prompt: "Do something",
+        tier: "light",
+        description: "Test task",
+      };
+
+      const result = await manager.runTask(task);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
+      expect(result.output.length).toBe(5000);
+      // Should start with "B"s (the last part), not "A"s (the first part)
+      expect(result.output.startsWith("B")).toBe(true);
+      expect(result.output).toBe("B".repeat(5000)); // Last 5000 should be all "B"s
     });
   });
 });
