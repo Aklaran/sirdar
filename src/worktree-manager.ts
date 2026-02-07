@@ -164,48 +164,78 @@ export class WorktreeManager {
     // Determine target branch
     const target = targetBranch ?? (await this.getDefaultBranch(info.repoPath));
 
-    // Checkout target branch
-    await this.exec(`git checkout ${target}`, {
-      cwd: info.repoPath,
-    });
+    // Set committer name and email for automated rebase context
+    const gitEnv = 'GIT_COMMITTER_NAME="Sirdar" GIT_COMMITTER_EMAIL="sirdar@annapurna"';
 
-    // Attempt merge
-    const mergeResult = await this.exec(
-      `git merge ${info.branchName} --no-ff -m "Merge ${info.branchName}: ${info.taskId}"`,
+    // Attempt rebase: rebase agent branch onto target
+    const rebaseResult = await this.exec(
+      `${gitEnv} git rebase ${target} ${info.branchName}`,
       {
         cwd: info.repoPath,
       }
     );
 
-    if (mergeResult.code === 0) {
-      // Merge succeeded - cleanup and return success
-      await this.cleanup(info);
-      return {
-        success: true,
-        mergedBranch: info.branchName,
-      };
+    // If rebase failed, attempt conflict resolution
+    if (rebaseResult.code !== 0) {
+      // Try to resolve conflicts by accepting incoming (agent's) changes
+      await this.exec("git checkout --theirs .", {
+        cwd: info.repoPath,
+      });
+
+      await this.exec("git add -A", {
+        cwd: info.repoPath,
+      });
+
+      // Continue the rebase after resolution
+      const continueResult = await this.exec(
+        `${gitEnv} git rebase --continue`,
+        {
+          cwd: info.repoPath,
+        }
+      );
+
+      // If continue still fails, abort and return failure
+      if (continueResult.code !== 0) {
+        // Get conflict files before aborting
+        const diffResult = await this.exec("git diff --name-only --diff-filter=U", {
+          cwd: info.repoPath,
+        });
+
+        const conflictFiles = diffResult.stdout
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0);
+
+        // Abort the rebase to restore clean state
+        await this.exec("git rebase --abort", {
+          cwd: info.repoPath,
+        });
+
+        return {
+          success: false,
+          mergedBranch: info.branchName,
+          conflictFiles,
+          error: "Rebase conflicts could not be resolved",
+        };
+      }
     }
 
-    // Merge failed - get conflict files
-    const diffResult = await this.exec("git diff --name-only --diff-filter=U", {
+    // Rebase succeeded (either directly or after resolution)
+    // Now checkout target branch
+    await this.exec(`git checkout ${target}`, {
       cwd: info.repoPath,
     });
 
-    const conflictFiles = diffResult.stdout
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
-
-    // Abort the merge to restore clean state
-    await this.exec("git merge --abort", {
+    // Fast-forward merge (should succeed since we rebased)
+    await this.exec(`git merge ${info.branchName} --ff-only`, {
       cwd: info.repoPath,
     });
 
+    // Cleanup and return success
+    await this.cleanup(info);
     return {
-      success: false,
+      success: true,
       mergedBranch: info.branchName,
-      conflictFiles,
-      error: "Merge conflicts detected",
     };
   }
 }

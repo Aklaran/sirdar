@@ -355,7 +355,19 @@ index 123..456 789
       repoPath: "/path/to/repo",
     };
 
-    it("checks out the target branch", async () => {
+    it("runs git rebase with target and branch", async () => {
+      const { exec, calls } = createMockExec();
+      const manager = new WorktreeManager(exec);
+
+      await manager.mergeWorktree(testInfo, "main");
+
+      const rebaseCall = calls.find((c) => c.command.includes("git rebase"));
+      expect(rebaseCall).toBeDefined();
+      expect(rebaseCall?.command).toContain("git rebase main agent/task-1");
+      expect(rebaseCall?.options?.cwd).toBe("/path/to/repo");
+    });
+
+    it("checks out target branch after successful rebase", async () => {
       const { exec, calls } = createMockExec();
       const manager = new WorktreeManager(exec);
 
@@ -367,7 +379,7 @@ index 123..456 789
       expect(checkoutCall?.options?.cwd).toBe("/path/to/repo");
     });
 
-    it("runs git merge with --no-ff and correct branch name", async () => {
+    it("runs git merge with --ff-only after rebase", async () => {
       const { exec, calls } = createMockExec();
       const manager = new WorktreeManager(exec);
 
@@ -375,13 +387,11 @@ index 123..456 789
 
       const mergeCall = calls.find((c) => c.command.includes("git merge"));
       expect(mergeCall).toBeDefined();
-      expect(mergeCall?.command).toContain("git merge agent/task-1");
-      expect(mergeCall?.command).toContain("--no-ff");
-      expect(mergeCall?.command).toContain('-m "Merge agent/task-1: task-1"');
+      expect(mergeCall?.command).toContain("git merge agent/task-1 --ff-only");
       expect(mergeCall?.options?.cwd).toBe("/path/to/repo");
     });
 
-    it("returns success:true on clean merge", async () => {
+    it("returns success:true on clean rebase and merge", async () => {
       const { exec } = createMockExec();
       const manager = new WorktreeManager(exec);
 
@@ -393,7 +403,7 @@ index 123..456 789
       });
     });
 
-    it("calls cleanup after successful merge", async () => {
+    it("calls cleanup after successful rebase and merge", async () => {
       const { exec, calls } = createMockExec();
       const manager = new WorktreeManager(exec);
 
@@ -407,39 +417,76 @@ index 123..456 789
       expect(branchDelete).toBeDefined();
     });
 
-    it("detects conflict files when merge fails", async () => {
+    it("attempts conflict resolution when rebase fails", async () => {
       const responses = new Map([
-        ["git merge", { stdout: "", stderr: "CONFLICT", code: 1 }],
-        ["git diff --name-only --diff-filter=U", { stdout: "src/file1.ts\nsrc/file2.ts\n", stderr: "", code: 0 }],
-      ]);
-      const { exec, calls } = createMockExec(responses);
-      const manager = new WorktreeManager(exec);
-
-      const result = await manager.mergeWorktree(testInfo, "main");
-
-      const diffCall = calls.find((c) => c.command.includes("git diff --name-only --diff-filter=U"));
-      expect(diffCall).toBeDefined();
-      expect(result.conflictFiles).toEqual(["src/file1.ts", "src/file2.ts"]);
-    });
-
-    it("aborts merge on conflict", async () => {
-      const responses = new Map([
-        ["git merge", { stdout: "", stderr: "CONFLICT", code: 1 }],
-        ["git diff --name-only --diff-filter=U", { stdout: "src/file1.ts\n", stderr: "", code: 0 }],
+        ["git rebase --continue", { stdout: "", stderr: "", code: 0 }],  // More specific first
+        ["git rebase --abort", { stdout: "", stderr: "", code: 0 }],
+        ["git rebase", { stdout: "", stderr: "CONFLICT", code: 1 }],
+        ["git checkout --theirs", { stdout: "", stderr: "", code: 0 }],
+        ["git add -A", { stdout: "", stderr: "", code: 0 }],
       ]);
       const { exec, calls } = createMockExec(responses);
       const manager = new WorktreeManager(exec);
 
       await manager.mergeWorktree(testInfo, "main");
 
-      const abortCall = calls.find((c) => c.command.includes("git merge --abort"));
-      expect(abortCall).toBeDefined();
-      expect(abortCall?.options?.cwd).toBe("/path/to/repo");
+      const checkoutTheirs = calls.find((c) => c.command.includes("git checkout --theirs ."));
+      const gitAdd = calls.find((c) => c.command.includes("git add -A"));
+      const rebaseContinue = calls.find((c) => c.command.includes("git rebase --continue"));
+
+      expect(checkoutTheirs).toBeDefined();
+      expect(gitAdd).toBeDefined();
+      expect(rebaseContinue).toBeDefined();
     });
 
-    it("returns success:false with conflictFiles on conflict", async () => {
+    it("completes merge after successful conflict resolution", async () => {
       const responses = new Map([
-        ["git merge", { stdout: "", stderr: "CONFLICT", code: 1 }],
+        ["git rebase --continue", { stdout: "", stderr: "", code: 0 }],  // More specific first
+        ["git rebase --abort", { stdout: "", stderr: "", code: 0 }],
+        ["git rebase", { stdout: "", stderr: "CONFLICT", code: 1 }],
+        ["git checkout --theirs", { stdout: "", stderr: "", code: 0 }],
+        ["git add -A", { stdout: "", stderr: "", code: 0 }],
+      ]);
+      const { exec, calls } = createMockExec(responses);
+      const manager = new WorktreeManager(exec);
+
+      const result = await manager.mergeWorktree(testInfo, "main");
+
+      // Should checkout target and ff-merge after successful conflict resolution
+      const checkoutCall = calls.find((c) => c.command.includes("git checkout main"));
+      const mergeCall = calls.find((c) => c.command.includes("git merge agent/task-1 --ff-only"));
+
+      expect(checkoutCall).toBeDefined();
+      expect(mergeCall).toBeDefined();
+      expect(result.success).toBe(true);
+    });
+
+    it("aborts rebase when conflict resolution fails", async () => {
+      const responses = new Map([
+        ["git rebase --continue", { stdout: "", stderr: "still conflicts", code: 1 }],  // More specific first
+        ["git rebase --abort", { stdout: "", stderr: "", code: 0 }],
+        ["git rebase", { stdout: "", stderr: "CONFLICT", code: 1 }],
+        ["git checkout --theirs", { stdout: "", stderr: "", code: 0 }],
+        ["git add -A", { stdout: "", stderr: "", code: 0 }],
+        ["git diff --name-only --diff-filter=U", { stdout: "src/file1.ts\nsrc/file2.ts\n", stderr: "", code: 0 }],
+      ]);
+      const { exec, calls } = createMockExec(responses);
+      const manager = new WorktreeManager(exec);
+
+      await manager.mergeWorktree(testInfo, "main");
+
+      const rebaseAbort = calls.find((c) => c.command.includes("git rebase --abort"));
+      expect(rebaseAbort).toBeDefined();
+      expect(rebaseAbort?.options?.cwd).toBe("/path/to/repo");
+    });
+
+    it("returns success:false with conflictFiles when rebase cannot be resolved", async () => {
+      const responses = new Map([
+        ["git rebase --continue", { stdout: "", stderr: "still conflicts", code: 1 }],  // More specific first
+        ["git rebase --abort", { stdout: "", stderr: "", code: 0 }],
+        ["git rebase", { stdout: "", stderr: "CONFLICT", code: 1 }],
+        ["git checkout --theirs", { stdout: "", stderr: "", code: 0 }],
+        ["git add -A", { stdout: "", stderr: "", code: 0 }],
         ["git diff --name-only --diff-filter=U", { stdout: "src/file1.ts\nsrc/file2.ts\n", stderr: "", code: 0 }],
       ]);
       const { exec } = createMockExec(responses);
@@ -451,7 +498,7 @@ index 123..456 789
         success: false,
         mergedBranch: "agent/task-1",
         conflictFiles: ["src/file1.ts", "src/file2.ts"],
-        error: "Merge conflicts detected",
+        error: "Rebase conflicts could not be resolved",
       });
     });
 
@@ -468,9 +515,9 @@ index 123..456 789
       const symbolicRefCall = calls.find((c) => c.command.includes("git symbolic-ref"));
       expect(symbolicRefCall).toBeDefined();
 
-      // Should checkout main
-      const checkoutCall = calls.find((c) => c.command.includes("git checkout"));
-      expect(checkoutCall?.command).toContain("git checkout main");
+      // Should rebase onto main
+      const rebaseCall = calls.find((c) => c.command.includes("git rebase"));
+      expect(rebaseCall?.command).toContain("git rebase main");
     });
   });
 });
