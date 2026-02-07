@@ -9,6 +9,7 @@ export function createMockPi(): ExtensionAPI {
     on: vi.fn(),
     registerTool: vi.fn(),
     registerCommand: vi.fn(),
+    registerShortcut: vi.fn(),
     exec: vi.fn().mockResolvedValue({ stdout: "", stderr: "", code: 0 }),
     appendEntry: vi.fn(),
     sendMessage: vi.fn(),
