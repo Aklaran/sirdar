@@ -419,6 +419,7 @@ export default function orchestrator(pi: ExtensionAPI) {
       if (!expanded) {
         let summary = theme.fg("toolTitle", theme.bold(`Review: ${details.taskId}\n`));
         summary += details.stat || "No changes";
+        summary += "\n" + theme.fg("dim", "Press Ctrl+O to expand full diff");
         return new Text(summary, 0, 0);
       }
       
