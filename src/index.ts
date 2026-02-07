@@ -5,9 +5,11 @@ import { StringEnum } from "@mariozechner/pi-ai";
 import { Text, matchesKey, Key, truncateToWidth } from "@mariozechner/pi-tui";
 import { join } from "path";
 import { homedir } from "os";
-import { DiffState, DiffReviewModal, createOverlayHandler } from "pi-diff-ui";
+import { DiffState, DiffReviewModal, createOverlayHandler, createPickerHandler } from "pi-diff-ui";
+import type { PickerItem, PickerCallbacks } from "pi-diff-ui";
 
 import { BudgetTracker } from "./budget-tracker.js";
+import { AgentMetadataStore } from "./agent-metadata-store.js";
 import { MemoryLogger } from "./memory-logger.js";
 import { LifecycleManager } from "./lifecycle-manager.js";
 import { AgentPool, type AgentInfo } from "./agent-pool.js";
@@ -111,6 +113,7 @@ export default function orchestrator(pi: ExtensionAPI) {
   let agentPool: AgentPool | null = null;
   let worktreeManager: WorktreeManager | null = null;
   let uiContext: { ui: any } | null = null;
+  let metadataStore: AgentMetadataStore | null = null;
   
   // Track worktree info per taskId for merge/review operations
   const worktreeMap: Map<string, WorktreeInfo> = new Map();
@@ -635,12 +638,142 @@ export default function orchestrator(pi: ExtensionAPI) {
   });
 
   // ============================================================================
-  // 7. Hook into session_start event
+  // 7. Register keyboard shortcuts
+  // ============================================================================
+  
+  pi.registerShortcut("ctrl+shift+a", {
+    description: "Browse agent diffs",
+    handler: async (ctx) => {
+      if (!ctx.hasUI) return;
+      
+      if (!metadataStore) {
+        ctx.ui.notify("Agent metadata not loaded yet", "info");
+        return;
+      }
+      
+      const completed = metadataStore.getCompleted();
+      if (completed.length === 0) {
+        ctx.ui.notify("No completed agents to review", "info");
+        return;
+      }
+      
+      await ctx.ui.custom<void>(
+        (tui, theme, _keybindings, done) => {
+          // Build picker items from metadata
+          const items: PickerItem[] = completed.map(agent => ({
+            id: agent.taskId,
+            label: agent.description,
+            meta: agent.tier,
+          }));
+          
+          // State machine: 'picker' | 'diff'
+          let mode: "picker" | "diff" = "picker";
+          let activeHandler: { render: (w: number) => string[]; handleInput: (d: string) => void; invalidate?: () => void };
+          
+          const keyUtils = { matchesKey, Key, truncateToWidth };
+          
+          const highlightProvider = (code: string, fp: string): string => {
+            const lang = getLanguageFromPath(fp);
+            if (!lang) return code;
+            try { 
+              const highlighted = highlightCode(code, lang);
+              return Array.isArray(highlighted) ? highlighted.join('\n') : highlighted;
+            } catch { 
+              return code; 
+            }
+          };
+          
+          // Switch to diff view for a specific agent
+          async function showAgentDiff(agentMeta: typeof completed[0]) {
+            // Load diff from git
+            const state = new DiffState();
+            const execSync = require("node:child_process").execSync;
+            
+            // Get changed files
+            let changedFiles: string[];
+            try {
+              const output = execSync(
+                `git diff main..${agentMeta.branchName} --name-only`,
+                { cwd: agentMeta.repoPath, encoding: "utf-8" }
+              );
+              changedFiles = output.trim().split("\n").filter((f: string) => f.length > 0);
+            } catch {
+              changedFiles = [];
+            }
+            
+            for (const filePath of changedFiles) {
+              let original = "";
+              let current = "";
+              try {
+                original = execSync(`git show main:${filePath}`, { cwd: agentMeta.repoPath, encoding: "utf-8" });
+              } catch { /* new file */ }
+              try {
+                current = execSync(`git show ${agentMeta.branchName}:${filePath}`, { cwd: agentMeta.repoPath, encoding: "utf-8" });
+              } catch { /* deleted file */ }
+              state.trackFile(filePath, original, current);
+            }
+            
+            if (state.pendingCount === 0) {
+              // No changes, stay in picker
+              return;
+            }
+            
+            const modal = new DiffReviewModal(state);
+            mode = "diff";
+            activeHandler = createOverlayHandler(
+              modal, tui, theme, keyUtils, highlightProvider,
+              () => {
+                // When diff overlay closes (q), go back to picker
+                mode = "picker";
+                activeHandler = pickerHandler;
+                tui.requestRender();
+              },
+              undefined,
+              { title: `Agent: ${agentMeta.description}` }
+            );
+            tui.requestRender();
+          }
+          
+          // Create the picker handler
+          const pickerHandler = createPickerHandler(
+            items, tui, theme, keyUtils,
+            {
+              onSelect: (item) => {
+                const agent = metadataStore!.get(item.id);
+                if (agent) showAgentDiff(agent);
+              },
+              onCancel: () => done(),
+            },
+            { title: "Agent Diffs" }
+          );
+          
+          activeHandler = pickerHandler;
+          
+          return {
+            render: (width: number) => activeHandler.render(width),
+            handleInput: (data: string) => { activeHandler.handleInput(data); },
+            invalidate: () => { activeHandler.invalidate?.(); },
+          };
+        },
+        {
+          overlay: true,
+          overlayOptions: { anchor: "center", width: "90%", minWidth: 60, margin: 1 },
+        }
+      );
+    },
+  });
+
+  // ============================================================================
+  // 8. Hook into session_start event
   // ============================================================================
   
   pi.on("session_start", async (_event, ctx) => {
     // Load budget history
     await budgetTracker.load();
+    
+    // Initialize and load agent metadata store
+    metadataStore = new AgentMetadataStore(join(dataDir, "agent-metadata.json"));
+    metadataStore.load();
     
     // Capture UI context
     uiContext = { ui: ctx.ui };
@@ -708,6 +841,22 @@ export default function orchestrator(pi: ExtensionAPI) {
             clearAgentWidget();
           }
           
+          // Save agent metadata
+          if (metadataStore) {
+            const wt = worktreeMap.get(info.taskId);
+            if (wt) {
+              metadataStore.add({
+                taskId: info.taskId,
+                description: info.description,
+                tier: info.tier,
+                branchName: wt.branchName,
+                repoPath: wt.repoPath,
+                status: "completed",
+                completedAt: Date.now(),
+              });
+            }
+          }
+          
           if (ctx.ui) {
             ctx.ui.notify(
               `✅ Agent completed: ${info.taskId}\n${info.description}`,
@@ -748,6 +897,22 @@ export default function orchestrator(pi: ExtensionAPI) {
           // Clear widget if this was the displayed agent
           if (currentAgentId === info.taskId) {
             clearAgentWidget();
+          }
+          
+          // Save agent metadata
+          if (metadataStore) {
+            const wt = worktreeMap.get(info.taskId);
+            if (wt) {
+              metadataStore.add({
+                taskId: info.taskId,
+                description: info.description,
+                tier: info.tier,
+                branchName: wt.branchName,
+                repoPath: wt.repoPath,
+                status: "failed",
+                completedAt: Date.now(),
+              });
+            }
           }
           
           if (ctx.ui) {
