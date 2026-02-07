@@ -14,11 +14,11 @@ describe("Orchestrator Extension", () => {
     expect(typeof orchestrator).toBe("function");
   });
 
-  it("registers the expected tools (spawn_agent, check_agents, check_budget)", () => {
+  it("registers the expected tools (spawn_agent, check_agents, check_budget, log_reflection)", () => {
     orchestrator(mockPi);
 
-    // Verify registerTool was called 3 times
-    expect(mockPi.registerTool).toHaveBeenCalledTimes(3);
+    // Verify registerTool was called 4 times
+    expect(mockPi.registerTool).toHaveBeenCalledTimes(4);
 
     // Extract the registered tool names
     const calls = (mockPi.registerTool as any).mock.calls;
@@ -27,6 +27,7 @@ describe("Orchestrator Extension", () => {
     expect(toolNames).toContain("spawn_agent");
     expect(toolNames).toContain("check_agents");
     expect(toolNames).toContain("check_budget");
+    expect(toolNames).toContain("log_reflection");
   });
 
   it("registers the expected commands (agents)", () => {

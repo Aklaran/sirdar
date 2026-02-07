@@ -13,6 +13,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@mariozechner/pi-ai": "latest",
     "@mariozechner/pi-coding-agent": "latest",
     "@sinclair/typebox": "^0.34.48"
   },
