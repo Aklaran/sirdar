@@ -10,10 +10,10 @@ describe("selectModel", () => {
     expect(result.thinkingLevel).toBe("off");
   });
 
-  it("returns claude-3-5-haiku-latest with thinking off for trivial-code tier", () => {
+  it("returns claude-haiku-4-5 with thinking off for trivial-code tier", () => {
     const result = selectModel("trivial-code");
     expect(result.provider).toBe("anthropic");
-    expect(result.modelId).toBe("claude-3-5-haiku-latest");
+    expect(result.modelId).toBe("claude-haiku-4-5");
     expect(result.thinkingLevel).toBe("off");
   });
 

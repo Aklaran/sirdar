@@ -33,7 +33,7 @@ export function selectModel(tier: TaskTier): ModelSelection {
     case "trivial-code":
       return {
         provider: "anthropic",
-        modelId: "claude-3-5-haiku-latest",
+        modelId: "claude-haiku-4-5",
         thinkingLevel: "off",
       };
     
