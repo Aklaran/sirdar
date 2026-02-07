@@ -33,12 +33,8 @@ export function createMockSession(options?: {
         throw new Error("Session aborted");
       }
 
-      if (shouldThrow) {
-        throw new Error(errorMessage);
-      }
-
       // Simulate events during processing
-      // Text delta event
+      // Text delta event (emit before throwing so error path has output)
       subscribers.forEach((listener) => {
         listener({
           type: "message_update",
@@ -48,6 +44,10 @@ export function createMockSession(options?: {
           },
         } as AgentSessionEvent);
       });
+
+      if (shouldThrow) {
+        throw new Error(errorMessage);
+      }
 
       // Agent end event
       subscribers.forEach((listener) => {
