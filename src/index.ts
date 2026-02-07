@@ -1,10 +1,11 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { createAgentSession } from "@mariozechner/pi-coding-agent";
+import { createAgentSession, highlightCode, getLanguageFromPath } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { StringEnum } from "@mariozechner/pi-ai";
-import { Text } from "@mariozechner/pi-tui";
+import { Text, matchesKey, Key, truncateToWidth } from "@mariozechner/pi-tui";
 import { join } from "path";
 import { homedir } from "os";
+import { DiffState, DiffReviewModal, createOverlayHandler } from "pi-diff-ui";
 
 import { BudgetTracker } from "./budget-tracker.js";
 import { MemoryLogger } from "./memory-logger.js";
@@ -389,33 +390,109 @@ export default function orchestrator(pi: ExtensionAPI) {
         };
       }
       
-      // Run git diff --stat
-      const statResult = await pi.exec("bash", ["-c", `git diff main..${worktreeInfo.branchName} --stat`], {
-        cwd: worktreeInfo.repoPath,
+      const { branchName, repoPath } = worktreeInfo;
+      
+      // Get changed files
+      const nameResult = await pi.exec("bash", ["-c", `git diff main..${branchName} --name-only`], {
+        cwd: repoPath,
+      });
+      const changedFiles = nameResult.stdout.trim().split("\n").filter((f) => f.length > 0);
+      
+      if (changedFiles.length === 0) {
+        return {
+          content: [{ type: "text", text: `No changes found for ${taskId}` }],
+          details: undefined,
+        };
+      }
+      
+      // Get stat for summary
+      const statResult = await pi.exec("bash", ["-c", `git diff main..${branchName} --stat`], {
+        cwd: repoPath,
       });
       
-      // Run git diff for full diff
-      const diffResult = await pi.exec("bash", ["-c", `git diff main..${worktreeInfo.branchName}`], {
-        cwd: worktreeInfo.repoPath,
-      });
+      // Build DiffState from git
+      const state = new DiffState();
+      for (const filePath of changedFiles) {
+        let original = "";
+        let current = "";
+        
+        // Try to get original (main) version
+        try {
+          const origResult = await pi.exec("bash", ["-c", `git show main:${filePath}`], {
+            cwd: repoPath,
+          });
+          original = origResult.stdout;
+        } catch {
+          // New file - original is empty
+        }
+        
+        // Try to get current (branch) version
+        try {
+          const curResult = await pi.exec("bash", ["-c", `git show ${branchName}:${filePath}`], {
+            cwd: repoPath,
+          });
+          current = curResult.stdout;
+        } catch {
+          // Deleted file - current is empty
+        }
+        
+        state.trackFile(filePath, original, current);
+      }
       
-      // Parse stats
+      const modal = new DiffReviewModal(state);
+      
+      // Open overlay if UI available
+      if (ctx.hasUI) {
+        await ctx.ui.custom<void>(
+          (tui, theme, _keybindings, done) => {
+            const highlightProvider = (code: string, fp: string): string => {
+              const lang = getLanguageFromPath(fp);
+              if (!lang) return code;
+              try {
+                const lines = highlightCode(code, lang);
+                return lines.join("\n");
+              } catch {
+                return code;
+              }
+            };
+            const keyUtils = { matchesKey, Key, truncateToWidth };
+            return createOverlayHandler(
+              modal,
+              tui,
+              theme,
+              keyUtils,
+              highlightProvider,
+              done,
+              undefined,
+              {
+                title: `Review: ${taskId}`,
+              }
+            );
+          },
+          {
+            overlay: true,
+            overlayOptions: { anchor: "center", width: "90%", minWidth: 60, margin: 1 },
+          }
+        );
+      }
+      
+      // Still return text summary for the conversation
       const stats = parseGitDiffStat(statResult.stdout);
-      
-      const output = `# Diff for ${taskId}\n\n## Summary\n\n${statResult.stdout}\n\n## Full Diff\n\n${diffResult.stdout}`;
-      
-      const details: ReviewAgentDetails = {
-        taskId,
-        stat: statResult.stdout,
-        diff: diffResult.stdout,
-        fileCount: stats.fileCount,
-        insertions: stats.insertions,
-        deletions: stats.deletions,
-      };
-      
       return {
-        content: [{ type: "text", text: output }],
-        details,
+        content: [
+          {
+            type: "text",
+            text: `Reviewed ${changedFiles.length} files for ${taskId}\n\n${statResult.stdout}`,
+          },
+        ],
+        details: {
+          taskId,
+          stat: statResult.stdout,
+          diff: "",
+          fileCount: stats.fileCount,
+          insertions: stats.insertions,
+          deletions: stats.deletions,
+        },
       };
     },
     renderResult(result, { expanded }, theme) {
@@ -426,19 +503,10 @@ export default function orchestrator(pi: ExtensionAPI) {
         return new Text(text, 0, 0);
       }
       
-      // Collapsed: show stat summary only
-      if (!expanded) {
-        let summary = theme.fg("toolTitle", theme.bold(`Review: ${details.taskId}\n`));
-        summary += details.stat || "No changes";
-        summary += "\n" + theme.fg("dim", "Press Ctrl+O to expand full diff");
-        return new Text(summary, 0, 0);
-      }
-      
-      // Expanded: show stat + full diff
-      let text = theme.fg("toolTitle", theme.bold(`Review: ${details.taskId}\n`));
-      text += details.stat + "\n\n";
-      text += details.diff || "No diff";
-      return new Text(text, 0, 0);
+      // Show summary only (interactive diff is in the overlay)
+      let summary = theme.fg("toolTitle", theme.bold(`Review: ${details.taskId}\n`));
+      summary += details.stat || "No changes";
+      return new Text(summary, 0, 0);
     },
   });
 

@@ -17,6 +17,9 @@ importers:
       '@sinclair/typebox':
         specifier: ^0.34.48
         version: 0.34.48
+      pi-diff-ui:
+        specifier: file:/home/annapurna/repos/pi-diff-ui
+        version: file:../../../pi-diff-ui
     devDependencies:
       '@mariozechner/pi-tui':
         specifier: ^0.52.8
@@ -998,6 +1001,10 @@ packages:
     resolution: {integrity: sha512-EjePK1srD3P08o2j4f0ExnylqRs5B9tJjcp9t1krH2qRi8CCdsYfwe9JgSLurFBWwq4uOlipzfk5fHNvwFKr8Q==}
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
 
+  diff@7.0.0:
+    resolution: {integrity: sha512-PJWHUb1RFevKCwaFA9RlG5tCd+FO5iRh9A8HEtkmBH2Li03iJriB6m6JIN4rGz3K3JLawI7/veA1xzRKP6ISBw==}
+    engines: {node: '>=0.3.1'}
+
   diff@8.0.3:
     resolution: {integrity: sha512-qejHi7bcSD4hQAZE0tNAawRK1ZtafHDmMTMkrrIGgSLl7hTnQHmKCeB45xAcbfTqK2zowkM3j3bHt/4b/ARbYQ==}
     engines: {node: '>=0.3.1'}
@@ -1358,6 +1365,9 @@ packages:
 
   pathval@1.1.1:
     resolution: {integrity: sha512-Dp6zGqpTdETdR63lehJYPeIOqpiNBNtc7BpWSLrOje7UaIsE5aY92r/AunQA7rsXvet3lrJ3JnZX29UPTKXyKQ==}
+
+  pi-diff-ui@file:../../../pi-diff-ui:
+    resolution: {directory: ../../../pi-diff-ui, type: directory}
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
@@ -2913,6 +2923,8 @@ snapshots:
 
   diff-sequences@29.6.3: {}
 
+  diff@7.0.0: {}
+
   diff@8.0.3: {}
 
   eastasianwidth@0.2.0: {}
@@ -3294,6 +3306,10 @@ snapshots:
   pathe@2.0.3: {}
 
   pathval@1.1.1: {}
+
+  pi-diff-ui@file:../../../pi-diff-ui:
+    dependencies:
+      diff: 7.0.0
 
   picocolors@1.1.1: {}
 
