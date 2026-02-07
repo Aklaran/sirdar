@@ -23,9 +23,16 @@ interface LifecycleManagerDeps {
   modelRegistry: ModelRegistry;
 }
 
-const SYSTEM_PROMPT = `You are a focused coding agent. Complete the following task efficiently.
+function buildSystemPrompt(cwd: string): string {
+  return `You are a focused coding agent. Complete the following task efficiently.
+
+Your working directory is: ${cwd}
+IMPORTANT: Stay in this directory. Use relative paths. Do NOT cd to other directories unless the task explicitly requires it.
+
 Do not ask questions — make reasonable decisions and proceed.
-If you encounter an error, try to fix it. If you cannot, report what went wrong.`;
+If you encounter an error, try to fix it. If you cannot, report what went wrong.
+When finished, commit your changes with the commit message specified in the task.`;
+}
 
 const DEFAULT_TIMEOUT_MS = 600000; // 10 minutes
 const MAX_OUTPUT_LENGTH = 5000;
@@ -67,8 +74,9 @@ export class LifecycleManager {
       }
 
       // 3. Create ResourceLoader with custom system prompt
+      const effectiveCwd = task.cwd || process.cwd();
       const loader = new DefaultResourceLoader({
-        systemPromptOverride: () => SYSTEM_PROMPT,
+        systemPromptOverride: () => buildSystemPrompt(effectiveCwd),
       });
       await loader.reload();
 

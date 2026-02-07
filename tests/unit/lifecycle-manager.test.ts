@@ -86,6 +86,33 @@ describe("LifecycleManager", () => {
       expect(callArgs.sessionManager.sessionFile).toBeUndefined();
     });
 
+    it("includes working directory in system prompt", async () => {
+      const mockSession = createMockSession();
+      const mockCreateSession = createMockSessionFactory(mockSession);
+
+      const manager = new LifecycleManager({
+        createSession: mockCreateSession,
+        authStorage: mockAuthStorage,
+        modelRegistry: mockModelRegistry,
+      });
+
+      const task: TaskDefinition = {
+        id: "test-task",
+        prompt: "Do something",
+        tier: "light",
+        description: "Test task",
+        cwd: "/home/user/repos/myproject/.worktrees/agent-123",
+      };
+
+      await manager.runTask(task);
+
+      const callArgs = mockCreateSession.mock.calls[0][0];
+      // The resourceLoader should have a system prompt containing the cwd
+      const systemPrompt = await callArgs.resourceLoader.getSystemPrompt();
+      expect(systemPrompt).toContain("/home/user/repos/myproject/.worktrees/agent-123");
+      expect(systemPrompt).toContain("Stay in this directory");
+    });
+
     it("calls session.prompt with the task prompt", async () => {
       const mockSession = createMockSession();
       const mockCreateSession = createMockSessionFactory(mockSession);
