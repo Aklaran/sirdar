@@ -10,7 +10,7 @@ import { MemoryLogger } from "./memory-logger.js";
 import { LifecycleManager } from "./lifecycle-manager.js";
 import { AgentPool, type AgentInfo } from "./agent-pool.js";
 import { ApprovalManager, type ApprovalUI } from "./approval.js";
-import { WorktreeManager } from "./worktree-manager.js";
+import { WorktreeManager, type WorktreeInfo } from "./worktree-manager.js";
 import { selectModel } from "./model-selector.js";
 import type { TaskDefinition, TaskTier } from "./types.js";
 
@@ -97,6 +97,9 @@ export default function orchestrator(pi: ExtensionAPI) {
   let agentPool: AgentPool | null = null;
   let worktreeManager: WorktreeManager | null = null;
   let uiContext: { ui: any } | null = null;
+  
+  // Track worktree info per taskId for merge/review operations
+  const worktreeMap: Map<string, WorktreeInfo> = new Map();
 
   // Widget state for live output
   let currentAgentId: string | null = null;
@@ -170,6 +173,8 @@ export default function orchestrator(pi: ExtensionAPI) {
             onUpdate({ content: [{ type: "text", text: `📁 Creating git worktree for isolation...` }] });
             const worktreeInfo = await worktreeManager.createWorktree(taskId, params.cwd);
             task.cwd = worktreeInfo.worktreePath;
+            // Store worktree info for later merge/review
+            worktreeMap.set(taskId, worktreeInfo);
             onUpdate({ content: [{ type: "text", text: `📁 Worktree ready: ${worktreeInfo.worktreePath}` }] });
           }
         } catch (error) {
@@ -330,7 +335,144 @@ export default function orchestrator(pi: ExtensionAPI) {
   });
 
   // ============================================================================
-  // 6. Register /agents command
+  // 6. Register review_agent tool
+  // ============================================================================
+  
+  pi.registerTool({
+    name: "review_agent",
+    label: "Review Agent",
+    description: "Shows the git diff of a completed agent's worktree branch vs main",
+    parameters: Type.Object({
+      taskId: Type.String({ description: "Task ID of the agent to review" }),
+    }),
+    async execute(toolCallId, params, signal, onUpdate, ctx) {
+      const { taskId } = params;
+      
+      // Look up the agent in the pool
+      if (!agentPool) {
+        return {
+          content: [{ type: "text", text: "Agent pool not initialized" }],
+          isError: true,
+        };
+      }
+      
+      const agent = agentPool.getAgent(taskId);
+      if (!agent) {
+        return {
+          content: [{ type: "text", text: `Agent not found: ${taskId}` }],
+          isError: true,
+        };
+      }
+      
+      // Check if agent is still running or queued
+      if (agent.status === "running" || agent.status === "queued") {
+        return {
+          content: [{ type: "text", text: `Agent is still ${agent.status}, wait for completion` }],
+        };
+      }
+      
+      // Get worktree info
+      const worktreeInfo = worktreeMap.get(taskId);
+      if (!worktreeInfo) {
+        return {
+          content: [{ type: "text", text: `No worktree found for task: ${taskId}` }],
+          isError: true,
+        };
+      }
+      
+      // Run git diff --stat
+      const statResult = await pi.exec("bash", ["-c", `git diff main..${worktreeInfo.branchName} --stat`], {
+        cwd: worktreeInfo.repoPath,
+      });
+      
+      // Run git diff for full diff
+      const diffResult = await pi.exec("bash", ["-c", `git diff main..${worktreeInfo.branchName}`], {
+        cwd: worktreeInfo.repoPath,
+      });
+      
+      const output = `# Diff for ${taskId}\n\n## Summary\n\n${statResult.stdout}\n\n## Full Diff\n\n${diffResult.stdout}`;
+      
+      return {
+        content: [{ type: "text", text: output }],
+      };
+    },
+  });
+
+  // ============================================================================
+  // 7. Register merge_agent tool
+  // ============================================================================
+  
+  pi.registerTool({
+    name: "merge_agent",
+    label: "Merge Agent",
+    description: "Merges a completed agent's branch into main and cleans up",
+    parameters: Type.Object({
+      taskId: Type.String({ description: "Task ID of the agent to merge" }),
+    }),
+    async execute(toolCallId, params, signal, onUpdate, ctx) {
+      const { taskId } = params;
+      
+      // Look up the agent in the pool
+      if (!agentPool) {
+        return {
+          content: [{ type: "text", text: "Agent pool not initialized" }],
+          isError: true,
+        };
+      }
+      
+      const agent = agentPool.getAgent(taskId);
+      if (!agent) {
+        return {
+          content: [{ type: "text", text: `Agent not found: ${taskId}` }],
+          isError: true,
+        };
+      }
+      
+      // Check if agent is completed
+      if (agent.status !== "completed") {
+        return {
+          content: [{ type: "text", text: `Agent is ${agent.status}, can only merge completed agents` }],
+          isError: true,
+        };
+      }
+      
+      // Get worktree info
+      const worktreeInfo = worktreeMap.get(taskId);
+      if (!worktreeInfo) {
+        return {
+          content: [{ type: "text", text: `No worktree found for task: ${taskId}` }],
+          isError: true,
+        };
+      }
+      
+      if (!worktreeManager) {
+        return {
+          content: [{ type: "text", text: "Worktree manager not initialized" }],
+          isError: true,
+        };
+      }
+      
+      // Call mergeWorktree
+      const mergeResult = await worktreeManager.mergeWorktree(worktreeInfo);
+      
+      if (mergeResult.success) {
+        // Remove from worktree map since it's cleaned up
+        worktreeMap.delete(taskId);
+        return {
+          content: [{ type: "text", text: `✅ Merged ${worktreeInfo.branchName} into main and cleaned up worktree` }],
+        };
+      } else {
+        const conflictList = mergeResult.conflictFiles?.join(", ") || "unknown files";
+        return {
+          content: [{ type: "text", text: `❌ Merge conflicts in: ${conflictList}. Branch preserved for manual resolution.` }],
+          isError: true,
+        };
+      }
+    },
+  });
+
+  // ============================================================================
+  // 8. Register /agents command
   // ============================================================================
   
   pi.registerCommand("agents", {
