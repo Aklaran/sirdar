@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { selectModel, getBudgetThresholds } from "../../src/model-selector";
+import { selectModel, getBudgetThresholds, getExpectedDuration } from "../../src/model-selector";
 import type { TaskTier, ModelSelection, BudgetThresholds, TaskDefinition, TaskResult } from "../../src/types";
 
 describe("selectModel", () => {
@@ -182,5 +182,52 @@ describe("Type compilation checks", () => {
     
     expect(thresholds.softWarning).toBe(2.00);
     expect(thresholds.hardFlag).toBe(5.00);
+  });
+});
+
+describe("getExpectedDuration", () => {
+  it("returns 15s for trivial-simple", () => {
+    const result = getExpectedDuration("trivial-simple");
+    expect(result.expectedSeconds).toBe(15);
+    expect(result.pollAfterSeconds).toBe(15);
+  });
+
+  it("returns 30s for trivial-code", () => {
+    const result = getExpectedDuration("trivial-code");
+    expect(result.expectedSeconds).toBe(30);
+    expect(result.pollAfterSeconds).toBe(30);
+  });
+
+  it("returns 60s for light", () => {
+    const result = getExpectedDuration("light");
+    expect(result.expectedSeconds).toBe(90);
+    expect(result.pollAfterSeconds).toBe(60);
+  });
+
+  it("returns 90s for standard", () => {
+    const result = getExpectedDuration("standard");
+    expect(result.expectedSeconds).toBe(180);
+    expect(result.pollAfterSeconds).toBe(90);
+  });
+
+  it("returns 3min for complex", () => {
+    const result = getExpectedDuration("complex");
+    expect(result.expectedSeconds).toBe(420);
+    expect(result.pollAfterSeconds).toBe(180);
+  });
+
+  it("returns 5min for deep", () => {
+    const result = getExpectedDuration("deep");
+    expect(result.expectedSeconds).toBe(900);
+    expect(result.pollAfterSeconds).toBe(300);
+  });
+
+  it("throws for invalid tier", () => {
+    expect(() => getExpectedDuration("invalid" as any)).toThrow("Invalid task tier");
+  });
+
+  it("has human-readable label", () => {
+    const result = getExpectedDuration("standard");
+    expect(result.label).toBe("~3 min");
   });
 });

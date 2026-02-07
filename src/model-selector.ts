@@ -5,7 +5,7 @@
  * Pure functions with no side effects or SDK dependencies.
  */
 
-import type { TaskTier, ModelSelection, BudgetThresholds } from "./types";
+import type { TaskTier, ModelSelection, BudgetThresholds, ExpectedDuration } from "./types";
 
 /**
  * Select the appropriate model and thinking level for a given task tier.
@@ -65,6 +65,28 @@ export function selectModel(tier: TaskTier): ModelSelection {
         thinkingLevel: "medium",
       };
     
+    default:
+      throw new Error(`Invalid task tier: ${tier}`);
+  }
+}
+
+/**
+ * Get expected duration and recommended poll timing for a task tier.
+ */
+export function getExpectedDuration(tier: TaskTier): ExpectedDuration {
+  switch (tier) {
+    case "trivial-simple":
+      return { expectedSeconds: 15, pollAfterSeconds: 15, label: "~15s" };
+    case "trivial-code":
+      return { expectedSeconds: 30, pollAfterSeconds: 30, label: "~30s" };
+    case "light":
+      return { expectedSeconds: 90, pollAfterSeconds: 60, label: "~1.5 min" };
+    case "standard":
+      return { expectedSeconds: 180, pollAfterSeconds: 90, label: "~3 min" };
+    case "complex":
+      return { expectedSeconds: 420, pollAfterSeconds: 180, label: "~7 min" };
+    case "deep":
+      return { expectedSeconds: 900, pollAfterSeconds: 300, label: "~15 min" };
     default:
       throw new Error(`Invalid task tier: ${tier}`);
   }

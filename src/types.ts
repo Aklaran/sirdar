@@ -24,6 +24,12 @@ export interface TaskDefinition {
   timeoutMs?: number;            // default 600000 (10 min)
 }
 
+export interface ExpectedDuration {
+  expectedSeconds: number;       // typical task duration
+  pollAfterSeconds: number;      // when to check status
+  label: string;                 // human-readable, e.g. "~3 min"
+}
+
 export interface BudgetThresholds {
   softWarning: number;           // dollars
   hardFlag: number;              // dollars
