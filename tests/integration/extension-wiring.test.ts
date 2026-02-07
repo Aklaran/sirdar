@@ -43,6 +43,18 @@ describe("Extension Wiring - Integration Tests", () => {
       expect(params).toHaveProperty("useWorktree");
     });
 
+    it("spawn_agent tool has timeoutMs parameter", () => {
+      orchestrator(mockPi);
+
+      const calls = (mockPi.registerTool as any).mock.calls;
+      const spawnAgentCall = calls.find((call: any) => call[0].name === "spawn_agent");
+      
+      expect(spawnAgentCall).toBeDefined();
+      const params = spawnAgentCall[0].parameters.properties;
+      
+      expect(params).toHaveProperty("timeoutMs");
+    });
+
     it("check_agents tool has status parameter", () => {
       orchestrator(mockPi);
 

@@ -56,7 +56,16 @@ export default function orchestrator(pi: ExtensionAPI) {
       return;
     }
 
-    const header = `🤖 agent/${currentAgentId} [${currentAgentTier}] — ${currentAgentDescription}`;
+    // Check if there are other running agents
+    let headerSuffix = "";
+    if (agentPool) {
+      const runningCount = agentPool.runningCount();
+      if (runningCount > 1) {
+        headerSuffix = ` (${runningCount - 1} others running)`;
+      }
+    }
+
+    const header = `🤖 agent/${currentAgentId} [${currentAgentTier}] — ${currentAgentDescription}${headerSuffix}`;
     const maxLineLength = 100;
     
     // Truncate long lines
@@ -116,6 +125,7 @@ export default function orchestrator(pi: ExtensionAPI) {
       useWorktree: Type.Optional(Type.Boolean({ 
         description: "Whether to use git worktree isolation. Default true for code tasks." 
       })),
+      timeoutMs: Type.Optional(Type.Number({ description: "Timeout in seconds (optional, no default timeout)" })),
     }),
     async execute(toolCallId, params, signal, onUpdate, ctx) {
       // Generate task ID
@@ -128,6 +138,7 @@ export default function orchestrator(pi: ExtensionAPI) {
         tier: params.tier as TaskTier,
         description: params.description,
         cwd: params.cwd,
+        timeoutMs: params.timeoutMs ? params.timeoutMs * 1000 : undefined,
       };
       
       // Get model selection for approval message
