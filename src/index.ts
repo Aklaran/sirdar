@@ -160,7 +160,7 @@ export default function orchestrator(pi: ExtensionAPI) {
       // Get model selection
       const modelSelection = selectModel(params.tier as TaskTier);
       
-      onUpdate({ content: [{ type: "text", text: `✅ Spawning ${params.tier} task — model: ${modelSelection.modelId}, thinking: ${modelSelection.thinkingLevel}` }] });
+      onUpdate?.({ content: [{ type: "text", text: `✅ Spawning ${params.tier} task — model: ${modelSelection.modelId}, thinking: ${modelSelection.thinkingLevel}` }], details: undefined });
       
       // Check if we should use worktree
       const shouldUseWorktree = params.useWorktree ?? true;
@@ -168,15 +168,15 @@ export default function orchestrator(pi: ExtensionAPI) {
         try {
           const isRepo = await worktreeManager.isGitRepo(params.cwd);
           if (isRepo) {
-            onUpdate({ content: [{ type: "text", text: `📁 Creating git worktree for isolation...` }] });
+            onUpdate?.({ content: [{ type: "text", text: `📁 Creating git worktree for isolation...` }], details: undefined });
             const worktreeInfo = await worktreeManager.createWorktree(taskId, params.cwd);
             task.cwd = worktreeInfo.worktreePath;
             // Store worktree info for later merge/review
             worktreeMap.set(taskId, worktreeInfo);
-            onUpdate({ content: [{ type: "text", text: `📁 Worktree ready: ${worktreeInfo.worktreePath}` }] });
+            onUpdate?.({ content: [{ type: "text", text: `📁 Worktree ready: ${worktreeInfo.worktreePath}` }], details: undefined });
           }
         } catch (error) {
-          onUpdate({ content: [{ type: "text", text: `⚠️ Worktree creation failed, using original cwd` }] });
+          onUpdate?.({ content: [{ type: "text", text: `⚠️ Worktree creation failed, using original cwd` }], details: undefined });
           console.error("Worktree creation failed:", error);
         }
       }
@@ -185,11 +185,12 @@ export default function orchestrator(pi: ExtensionAPI) {
       if (!agentPool) {
         return {
           content: [{ type: "text", text: "Agent pool not initialized" }],
+          details: undefined,
           isError: true,
         };
       }
       
-      onUpdate({ content: [{ type: "text", text: `🚀 Submitting to agent pool...` }] });
+      onUpdate?.({ content: [{ type: "text", text: `🚀 Submitting to agent pool...` }], details: undefined });
       const agentInfo = await agentPool.submit(task);
       
       // Update status if UI is available
@@ -205,6 +206,7 @@ export default function orchestrator(pi: ExtensionAPI) {
           type: "text",
           text: `${message}\nStatus: ${agentInfo.status}`,
         }],
+        details: undefined,
       };
     },
   });
@@ -227,6 +229,7 @@ export default function orchestrator(pi: ExtensionAPI) {
       if (!agentPool) {
         return {
           content: [{ type: "text", text: "Agent pool not initialized" }],
+          details: undefined,
         };
       }
       
@@ -250,6 +253,7 @@ export default function orchestrator(pi: ExtensionAPI) {
       if (agents.length === 0) {
         return {
           content: [{ type: "text", text: `No ${statusFilter === "all" ? "" : statusFilter + " "}agents` }],
+          details: undefined,
         };
       }
       
@@ -279,6 +283,7 @@ export default function orchestrator(pi: ExtensionAPI) {
       
       return {
         content: [{ type: "text", text }],
+        details: undefined,
       };
     },
   });
@@ -296,6 +301,7 @@ export default function orchestrator(pi: ExtensionAPI) {
       const report = budgetTracker.formatReport();
       return {
         content: [{ type: "text", text: report }],
+        details: undefined,
       };
     },
   });
@@ -328,6 +334,7 @@ export default function orchestrator(pi: ExtensionAPI) {
       
       return {
         content: [{ type: "text", text: `Logged ${type}: ${content}` }],
+        details: undefined,
       };
     },
   });
@@ -350,6 +357,7 @@ export default function orchestrator(pi: ExtensionAPI) {
       if (!agentPool) {
         return {
           content: [{ type: "text", text: "Agent pool not initialized" }],
+          details: undefined,
           isError: true,
         };
       }
@@ -358,6 +366,7 @@ export default function orchestrator(pi: ExtensionAPI) {
       if (!agent) {
         return {
           content: [{ type: "text", text: `Agent not found: ${taskId}` }],
+          details: undefined,
           isError: true,
         };
       }
@@ -366,6 +375,7 @@ export default function orchestrator(pi: ExtensionAPI) {
       if (agent.status === "running" || agent.status === "queued") {
         return {
           content: [{ type: "text", text: `Agent is still ${agent.status}, wait for completion` }],
+          details: undefined,
         };
       }
       
@@ -374,6 +384,7 @@ export default function orchestrator(pi: ExtensionAPI) {
       if (!worktreeInfo) {
         return {
           content: [{ type: "text", text: `No worktree found for task: ${taskId}` }],
+          details: undefined,
           isError: true,
         };
       }
@@ -449,6 +460,7 @@ export default function orchestrator(pi: ExtensionAPI) {
       if (!agentPool) {
         return {
           content: [{ type: "text", text: "Agent pool not initialized" }],
+          details: undefined,
           isError: true,
         };
       }
@@ -457,6 +469,7 @@ export default function orchestrator(pi: ExtensionAPI) {
       if (!agent) {
         return {
           content: [{ type: "text", text: `Agent not found: ${taskId}` }],
+          details: undefined,
           isError: true,
         };
       }
@@ -465,6 +478,7 @@ export default function orchestrator(pi: ExtensionAPI) {
       if (agent.status !== "completed") {
         return {
           content: [{ type: "text", text: `Agent is ${agent.status}, can only merge completed agents` }],
+          details: undefined,
           isError: true,
         };
       }
@@ -474,6 +488,7 @@ export default function orchestrator(pi: ExtensionAPI) {
       if (!worktreeInfo) {
         return {
           content: [{ type: "text", text: `No worktree found for task: ${taskId}` }],
+          details: undefined,
           isError: true,
         };
       }
@@ -481,6 +496,7 @@ export default function orchestrator(pi: ExtensionAPI) {
       if (!worktreeManager) {
         return {
           content: [{ type: "text", text: "Worktree manager not initialized" }],
+          details: undefined,
           isError: true,
         };
       }
@@ -493,11 +509,13 @@ export default function orchestrator(pi: ExtensionAPI) {
         worktreeMap.delete(taskId);
         return {
           content: [{ type: "text", text: `✅ Merged ${worktreeInfo.branchName} into main and cleaned up worktree` }],
+          details: undefined,
         };
       } else {
         const conflictList = mergeResult.conflictFiles?.join(", ") || "unknown files";
         return {
           content: [{ type: "text", text: `❌ Merge conflicts in: ${conflictList}. Branch preserved for manual resolution.` }],
+          details: undefined,
           isError: true,
         };
       }
@@ -599,7 +617,6 @@ export default function orchestrator(pi: ExtensionAPI) {
     // Initialize LifecycleManager with runtime dependencies
     lifecycleManager = new LifecycleManager({
       createSession: createAgentSession,
-      authStorage: ctx.authStorage,
       modelRegistry: ctx.modelRegistry,
     });
     

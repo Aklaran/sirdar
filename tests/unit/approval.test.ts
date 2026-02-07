@@ -1,11 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { ApprovalManager } from "../../src/approval";
 import type { TaskDefinition } from "../../src/types";
+import type { ApprovalUI } from "../../src/approval";
 
 // Mock UI interface
-interface MockApprovalUI {
-  confirm: ReturnType<typeof vi.fn>;
-  notify: ReturnType<typeof vi.fn>;
+interface MockApprovalUI extends ApprovalUI {
+  confirm: Mock<[string, string], Promise<boolean>>;
+  notify: Mock<[string, string], void>;
 }
 
 function createMockUI(): MockApprovalUI {

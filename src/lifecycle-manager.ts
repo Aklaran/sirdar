@@ -19,8 +19,8 @@ type CreateSessionFunction = typeof createAgentSession;
 
 interface LifecycleManagerDeps {
   createSession: CreateSessionFunction;
-  authStorage: AuthStorage;
-  modelRegistry: ModelRegistry;
+  authStorage?: AuthStorage;
+  modelRegistry?: ModelRegistry;
 }
 
 function buildSystemPrompt(cwd: string): string {
@@ -42,8 +42,8 @@ const MAX_OUTPUT_LENGTH = 5000;
  */
 export class LifecycleManager {
   private createSession: CreateSessionFunction;
-  private authStorage: AuthStorage;
-  private modelRegistry: ModelRegistry;
+  private authStorage?: AuthStorage;
+  private modelRegistry?: ModelRegistry;
 
   constructor(deps: LifecycleManagerDeps) {
     this.createSession = deps.createSession;
@@ -66,7 +66,7 @@ export class LifecycleManager {
       const modelSelection = selectModel(task.tier);
 
       // 2. Get the Model object
-      const model = getModel(modelSelection.provider, modelSelection.modelId);
+      const model = getModel(modelSelection.provider as any, modelSelection.modelId);
       if (!model) {
         throw new Error(
           `Model not found: ${modelSelection.provider}/${modelSelection.modelId}`

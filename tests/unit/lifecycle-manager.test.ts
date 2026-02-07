@@ -101,7 +101,10 @@ describe("LifecycleManager", () => {
       await manager.runTask(task);
 
       expect(mockCreateSession).toHaveBeenCalled();
-      const callArgs = mockCreateSession.mock.calls[0][0];
+      expect(mockCreateSession.mock.calls.length).toBeGreaterThan(0);
+      const firstCall = mockCreateSession.mock.calls[0] as any[];
+      const callArgs = firstCall[0];
+      expect(callArgs).toBeDefined();
       
       // For "complex" tier, should use claude-sonnet-4-5 with high thinking
       expect(callArgs.model).toBeDefined();
@@ -127,7 +130,10 @@ describe("LifecycleManager", () => {
 
       await manager.runTask(task);
 
-      const callArgs = mockCreateSession.mock.calls[0][0];
+      expect(mockCreateSession.mock.calls.length).toBeGreaterThan(0);
+      const firstCall = mockCreateSession.mock.calls[0] as any[];
+      const callArgs = firstCall[0];
+      expect(callArgs).toBeDefined();
       expect(callArgs.sessionManager).toBeDefined();
       // Check that it's an in-memory session manager
       expect(callArgs.sessionManager.sessionFile).toBeUndefined();
@@ -153,7 +159,10 @@ describe("LifecycleManager", () => {
 
       await manager.runTask(task);
 
-      const callArgs = mockCreateSession.mock.calls[0][0];
+      expect(mockCreateSession.mock.calls.length).toBeGreaterThan(0);
+      const firstCall = mockCreateSession.mock.calls[0] as any[];
+      const callArgs = firstCall[0];
+      expect(callArgs).toBeDefined();
       // The resourceLoader should have a system prompt containing the cwd
       const systemPrompt = await callArgs.resourceLoader.getSystemPrompt();
       expect(systemPrompt).toContain("/home/user/repos/myproject/.worktrees/agent-123");
@@ -390,7 +399,10 @@ describe("LifecycleManager", () => {
 
       await manager.runTask(task);
 
-      const callArgs = mockCreateSession.mock.calls[0][0];
+      expect(mockCreateSession.mock.calls.length).toBeGreaterThan(0);
+      const firstCall = mockCreateSession.mock.calls[0] as any[];
+      const callArgs = firstCall[0];
+      expect(callArgs).toBeDefined();
       expect(callArgs.cwd).toBe("/custom/working/dir");
     });
 
@@ -414,7 +426,10 @@ describe("LifecycleManager", () => {
 
       await manager.runTask(task);
 
-      const callArgs = mockCreateSession.mock.calls[0][0];
+      expect(mockCreateSession.mock.calls.length).toBeGreaterThan(0);
+      const firstCall = mockCreateSession.mock.calls[0] as any[];
+      const callArgs = firstCall[0];
+      expect(callArgs).toBeDefined();
       expect(callArgs.cwd).toBe(process.cwd());
     });
 
