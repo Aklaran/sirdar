@@ -32,6 +32,18 @@ export default function orchestrator(pi: ExtensionAPI) {
   
   const dataDir = join(homedir(), ".pi", "agent", "extensions", "orchestrator", "data");
   const logDir = join(homedir(), ".openclaw", "workspace", "memory");
+
+  /**
+   * Build a status text for agent pool
+   */
+  function getAgentStatusText(pool: AgentPool): string | undefined {
+    const running = pool.runningCount();
+    const queued = pool.queuedCount();
+    if (running === 0 && queued === 0) return undefined;
+    let text = `🤖 ${running} running`;
+    if (queued > 0) text += `, ${queued} queued`;
+    return text;
+  }
   
   const budgetTracker = new BudgetTracker(dataDir);
   const memoryLogger = new MemoryLogger(logDir);
@@ -40,6 +52,7 @@ export default function orchestrator(pi: ExtensionAPI) {
   let lifecycleManager: LifecycleManager | null = null;
   let agentPool: AgentPool | null = null;
   let worktreeManager: WorktreeManager | null = null;
+  let uiContext: { ui: any } | null = null;
 
   // ============================================================================
   // 2. Register spawn_agent tool
@@ -118,6 +131,12 @@ export default function orchestrator(pi: ExtensionAPI) {
       }
       
       const agentInfo = await agentPool.submit(task);
+      
+      // Update status if UI is available
+      if (uiContext?.ui) {
+        const status = getAgentStatusText(agentPool);
+        uiContext.ui.setStatus("orchestrator", status);
+      }
       
       // Return message
       const message = `Agent spawned: ${taskId} — ${params.description} (model: ${modelSelection.modelId}, thinking: ${modelSelection.thinkingLevel})`;
@@ -342,6 +361,9 @@ export default function orchestrator(pi: ExtensionAPI) {
     // Load budget history
     await budgetTracker.load();
     
+    // Capture UI context
+    uiContext = { ui: ctx.ui };
+    
     // Initialize LifecycleManager with runtime dependencies
     lifecycleManager = new LifecycleManager({
       createSession: createAgentSession,
@@ -377,6 +399,12 @@ export default function orchestrator(pi: ExtensionAPI) {
               `✅ Agent completed: ${info.taskId}\n${info.description}`,
               "info"
             );
+
+            // Update status
+            if (agentPool) {
+              const status = getAgentStatusText(agentPool);
+              ctx.ui.setStatus("orchestrator", status);
+            }
           }
           
           // Save budget after each task
@@ -399,6 +427,12 @@ export default function orchestrator(pi: ExtensionAPI) {
               `❌ Agent failed: ${info.taskId}\n${info.description}\nError: ${error}`,
               "error"
             );
+
+            // Update status 
+            if (agentPool) {
+              const status = getAgentStatusText(agentPool);
+              ctx.ui.setStatus("orchestrator", status);
+            }
           }
           
           // Save budget after each task
