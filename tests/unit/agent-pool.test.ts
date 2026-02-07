@@ -115,7 +115,7 @@ describe("AgentPool", () => {
     const task = createTask("task-1");
     await pool.submit(task);
 
-    expect(mockLifecycle.runTask).toHaveBeenCalledWith(task);
+    expect(mockLifecycle.runTask).toHaveBeenCalledWith(task, expect.any(Function));
     expect(mockLifecycle.runTask).toHaveBeenCalledTimes(1);
   });
 
@@ -282,9 +282,12 @@ describe("AgentPool", () => {
     // task-3 should now be running
     expect(pool.getQueued()).toHaveLength(0);
     expect(pool.getRunning()).toHaveLength(2);
-    expect(mockLifecycle.runTask).toHaveBeenCalledWith(expect.objectContaining({
-      id: "task-3",
-    }));
+    expect(mockLifecycle.runTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "task-3",
+      }),
+      expect.any(Function)
+    );
   });
 
   it("on task completion, budgetTracker.recordTask is called", async () => {

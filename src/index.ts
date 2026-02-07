@@ -44,6 +44,41 @@ export default function orchestrator(pi: ExtensionAPI) {
     if (queued > 0) text += `, ${queued} queued`;
     return text;
   }
+
+  /**
+   * Update the agent output widget
+   */
+  function updateAgentWidget() {
+    if (!uiContext?.ui) return;
+
+    if (!currentAgentId || outputBuffer.length === 0) {
+      uiContext.ui.setWidget("agent-output", undefined);
+      return;
+    }
+
+    const header = `🤖 agent/${currentAgentId} [${currentAgentTier}] — ${currentAgentDescription}`;
+    const maxLineLength = 100;
+    
+    // Truncate long lines
+    const truncatedLines = outputBuffer.map(line => 
+      line.length > maxLineLength ? line.substring(0, maxLineLength - 3) + "..." : line
+    );
+
+    const widgetLines = [header, "", ...truncatedLines];
+    uiContext.ui.setWidget("agent-output", widgetLines);
+  }
+
+  /**
+   * Clear the agent output widget
+   */
+  function clearAgentWidget() {
+    if (!uiContext?.ui) return;
+    currentAgentId = null;
+    currentAgentTier = null;
+    currentAgentDescription = null;
+    outputBuffer = [];
+    uiContext.ui.setWidget("agent-output", undefined);
+  }
   
   const budgetTracker = new BudgetTracker(dataDir);
   const memoryLogger = new MemoryLogger(logDir);
@@ -53,6 +88,12 @@ export default function orchestrator(pi: ExtensionAPI) {
   let agentPool: AgentPool | null = null;
   let worktreeManager: WorktreeManager | null = null;
   let uiContext: { ui: any } | null = null;
+
+  // Widget state for live output
+  let currentAgentId: string | null = null;
+  let currentAgentTier: TaskTier | null = null;
+  let currentAgentDescription: string | null = null;
+  let outputBuffer: string[] = [];
 
   // ============================================================================
   // 2. Register spawn_agent tool
@@ -389,6 +430,35 @@ export default function orchestrator(pi: ExtensionAPI) {
       lifecycleManager,
       budgetTracker,
       {
+        onOutput: (taskId: string, delta: string) => {
+          // Initialize the widget for this agent if needed
+          const agent = agentPool?.getAgent(taskId);
+          if (agent && currentAgentId !== taskId) {
+            currentAgentId = taskId;
+            currentAgentTier = agent.tier;
+            currentAgentDescription = agent.description;
+            outputBuffer = [];
+          }
+
+          // Add delta to the buffer, splitting by newlines
+          const lines = delta.split("\n");
+          for (let i = 0; i < lines.length; i++) {
+            if (i === 0 && outputBuffer.length > 0) {
+              // Append to the last line
+              outputBuffer[outputBuffer.length - 1] += lines[i];
+            } else {
+              outputBuffer.push(lines[i]);
+            }
+          }
+
+          // Keep only last 8 lines
+          if (outputBuffer.length > 8) {
+            outputBuffer = outputBuffer.slice(-8);
+          }
+
+          updateAgentWidget();
+        },
+
         onComplete: async (info) => {
           if (info.result) {
             const modelSelection = selectModel(info.tier);
@@ -397,6 +467,11 @@ export default function orchestrator(pi: ExtensionAPI) {
               info.tier,
               modelSelection.modelId
             );
+          }
+          
+          // Clear widget if this was the displayed agent
+          if (currentAgentId === info.taskId) {
+            clearAgentWidget();
           }
           
           if (ctx.ui) {
@@ -424,6 +499,11 @@ export default function orchestrator(pi: ExtensionAPI) {
               info.tier,
               modelSelection.modelId
             );
+          }
+          
+          // Clear widget if this was the displayed agent
+          if (currentAgentId === info.taskId) {
+            clearAgentWidget();
           }
           
           if (ctx.ui) {
