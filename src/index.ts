@@ -100,12 +100,14 @@ export default function orchestrator(pi: ExtensionAPI) {
       const approvalManager = new ApprovalManager(approvalUI);
       
       // Request approval
+      onUpdate(`🔍 Requesting approval for ${params.tier} task...`);
       const approved = await approvalManager.requestApproval(task);
       if (!approved) {
         return {
           content: [{ type: "text", text: "Task cancelled by user" }],
         };
       }
+      onUpdate(`✅ Approved — model: ${modelSelection.modelId}, thinking: ${modelSelection.thinkingLevel}`);
       
       // Check if we should use worktree
       const shouldUseWorktree = params.useWorktree ?? true;
@@ -113,11 +115,13 @@ export default function orchestrator(pi: ExtensionAPI) {
         try {
           const isRepo = await worktreeManager.isGitRepo(params.cwd);
           if (isRepo) {
+            onUpdate(`📁 Creating git worktree for isolation...`);
             const worktreeInfo = await worktreeManager.createWorktree(taskId, params.cwd);
             task.cwd = worktreeInfo.worktreePath;
+            onUpdate(`📁 Worktree ready: ${worktreeInfo.worktreePath}`);
           }
         } catch (error) {
-          // If worktree creation fails, continue with original cwd
+          onUpdate(`⚠️ Worktree creation failed, using original cwd`);
           console.error("Worktree creation failed:", error);
         }
       }
@@ -130,6 +134,7 @@ export default function orchestrator(pi: ExtensionAPI) {
         };
       }
       
+      onUpdate(`🚀 Submitting to agent pool...`);
       const agentInfo = await agentPool.submit(task);
       
       // Update status if UI is available
