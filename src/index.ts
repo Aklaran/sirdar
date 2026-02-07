@@ -9,7 +9,6 @@ import { BudgetTracker } from "./budget-tracker.js";
 import { MemoryLogger } from "./memory-logger.js";
 import { LifecycleManager } from "./lifecycle-manager.js";
 import { AgentPool, type AgentInfo } from "./agent-pool.js";
-import { ApprovalManager, type ApprovalUI } from "./approval.js";
 import { WorktreeManager, type WorktreeInfo } from "./worktree-manager.js";
 import { selectModel } from "./model-selector.js";
 import type { TaskDefinition, TaskTier } from "./types.js";
@@ -144,25 +143,10 @@ export default function orchestrator(pi: ExtensionAPI) {
         timeoutMs: params.timeoutMs ? params.timeoutMs * 1000 : undefined,
       };
       
-      // Get model selection for approval message
+      // Get model selection
       const modelSelection = selectModel(params.tier as TaskTier);
       
-      // Create ApprovalManager with ctx.ui
-      const approvalUI: ApprovalUI = {
-        confirm: ctx.ui.confirm.bind(ctx.ui),
-        notify: ctx.ui.notify.bind(ctx.ui),
-      };
-      const approvalManager = new ApprovalManager(approvalUI);
-      
-      // Request approval
-      onUpdate({ content: [{ type: "text", text: `🔍 Requesting approval for ${params.tier} task...` }] });
-      const approved = await approvalManager.requestApproval(task);
-      if (!approved) {
-        return {
-          content: [{ type: "text", text: "Task cancelled by user" }],
-        };
-      }
-      onUpdate({ content: [{ type: "text", text: `✅ Approved — model: ${modelSelection.modelId}, thinking: ${modelSelection.thinkingLevel}` }] });
+      onUpdate({ content: [{ type: "text", text: `✅ Spawning ${params.tier} task — model: ${modelSelection.modelId}, thinking: ${modelSelection.thinkingLevel}` }] });
       
       // Check if we should use worktree
       const shouldUseWorktree = params.useWorktree ?? true;

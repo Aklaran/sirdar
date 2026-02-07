@@ -144,12 +144,13 @@ describe("Extension Wiring - Integration Tests", () => {
       const onUpdate = vi.fn();
       const mockCtx = {
         ui: {
-          confirm: vi.fn().mockResolvedValue(false), // reject so we don't need agent pool
           notify: vi.fn(),
           setStatus: vi.fn(),
         },
       };
 
+      // Execute will fail because agent pool is not initialized (no session_start),
+      // but we should still get onUpdate calls for the initial status message
       await execute(
         "test-call-id",
         { description: "test", prompt: "test", tier: "light" },
@@ -158,7 +159,7 @@ describe("Extension Wiring - Integration Tests", () => {
         mockCtx,
       );
 
-      // onUpdate should have been called at least once (the approval request step)
+      // onUpdate should have been called at least once (the spawning status message)
       expect(onUpdate).toHaveBeenCalled();
       
       // Every call should use the Pi SDK format
