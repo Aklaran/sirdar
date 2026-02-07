@@ -668,7 +668,7 @@ export default function orchestrator(pi: ExtensionAPI) {
           
           // State machine: 'picker' | 'diff'
           let mode: "picker" | "diff" = "picker";
-          let activeHandler: { render: (w: number) => string[]; handleInput: (d: string) => void; invalidate?: () => void };
+          let activeHandler: { render: (w: number) => string[]; handleInput: (d: string) => boolean; invalidate?: () => void };
           
           const keyUtils = { matchesKey, Key, truncateToWidth };
           
@@ -676,8 +676,7 @@ export default function orchestrator(pi: ExtensionAPI) {
             const lang = getLanguageFromPath(fp);
             if (!lang) return code;
             try { 
-              const highlighted = highlightCode(code, lang);
-              return Array.isArray(highlighted) ? highlighted.join('\n') : highlighted;
+              return highlightCode(code, lang, theme);
             } catch { 
               return code; 
             }
@@ -751,7 +750,7 @@ export default function orchestrator(pi: ExtensionAPI) {
           
           return {
             render: (width: number) => activeHandler.render(width),
-            handleInput: (data: string) => { activeHandler.handleInput(data); },
+            handleInput: (data: string) => activeHandler.handleInput(data),
             invalidate: () => { activeHandler.invalidate?.(); },
           };
         },
