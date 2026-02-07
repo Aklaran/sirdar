@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import orchestrator from "../../src/index.js";
 import { createMockPi } from "../mocks/mock-pi.js";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
@@ -92,6 +92,46 @@ describe("Extension Wiring - Integration Tests", () => {
       const commandName = calls[0][0];
 
       expect(commandName).toBe("agents");
+    });
+  });
+
+  describe("onUpdate format", () => {
+    it("spawn_agent onUpdate calls use correct Pi SDK format { content: [{ type, text }] }", async () => {
+      orchestrator(mockPi);
+
+      const calls = (mockPi.registerTool as any).mock.calls;
+      const spawnAgentTool = calls.find((call: any) => call[0].name === "spawn_agent");
+      const execute = spawnAgentTool[0].execute;
+
+      const onUpdate = vi.fn();
+      const mockCtx = {
+        ui: {
+          confirm: vi.fn().mockResolvedValue(false), // reject so we don't need agent pool
+          notify: vi.fn(),
+          setStatus: vi.fn(),
+        },
+      };
+
+      await execute(
+        "test-call-id",
+        { description: "test", prompt: "test", tier: "light" },
+        new AbortController().signal,
+        onUpdate,
+        mockCtx,
+      );
+
+      // onUpdate should have been called at least once (the approval request step)
+      expect(onUpdate).toHaveBeenCalled();
+      
+      // Every call should use the Pi SDK format
+      for (const call of onUpdate.mock.calls) {
+        const arg = call[0];
+        expect(arg).toHaveProperty("content");
+        expect(Array.isArray(arg.content)).toBe(true);
+        expect(arg.content[0]).toHaveProperty("type", "text");
+        expect(arg.content[0]).toHaveProperty("text");
+        expect(typeof arg.content[0].text).toBe("string");
+      }
     });
   });
 
