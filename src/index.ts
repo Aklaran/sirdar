@@ -683,7 +683,7 @@ export default function orchestrator(pi: ExtensionAPI) {
           };
           
           // Switch to diff view for a specific agent
-          async function showAgentDiff(agentMeta: typeof completed[0]) {
+          function showAgentDiff(agentMeta: typeof completed[0]) {
             // Load diff from git
             const state = new DiffState();
             const execSync = require("node:child_process").execSync;
@@ -725,12 +725,10 @@ export default function orchestrator(pi: ExtensionAPI) {
                 // When diff overlay closes (q), go back to picker
                 mode = "picker";
                 activeHandler = pickerHandler;
-                tui.requestRender();
               },
               undefined,
               { title: `Agent: ${agentMeta.description}` }
             );
-            tui.requestRender();
           }
           
           // Create the picker handler
