@@ -118,6 +118,17 @@ describe("Extension Wiring - Integration Tests", () => {
       
       expect(params).toHaveProperty("taskId");
     });
+
+    it("review_agent tool has renderResult function", () => {
+      orchestrator(mockPi);
+
+      const calls = (mockPi.registerTool as any).mock.calls;
+      const reviewAgentCall = calls.find((call: any) => call[0].name === "review_agent");
+      
+      expect(reviewAgentCall).toBeDefined();
+      expect(reviewAgentCall[0]).toHaveProperty("renderResult");
+      expect(typeof reviewAgentCall[0].renderResult).toBe("function");
+    });
   });
 
   describe("Command Registration", () => {
@@ -215,6 +226,98 @@ describe("Extension Wiring - Integration Tests", () => {
       // Verify that setWidget is available and callable (lightweight check)
       expect(mockCtx.ui.setWidget).toBeDefined();
       expect(typeof mockCtx.ui.setWidget).toBe("function");
+    });
+  });
+
+  describe("review_agent renderResult", () => {
+    it("renderResult handles collapsed state (summary only)", () => {
+      orchestrator(mockPi);
+
+      const calls = (mockPi.registerTool as any).mock.calls;
+      const reviewAgentCall = calls.find((call: any) => call[0].name === "review_agent");
+      const renderResult = reviewAgentCall[0].renderResult;
+
+      const mockResult = {
+        content: [{ type: "text", text: "Full output" }],
+        details: {
+          taskId: "task-123",
+          stat: " 3 files changed, 45 insertions(+), 12 deletions(-)",
+          diff: "full diff content here",
+          fileCount: 3,
+          insertions: 45,
+          deletions: 12,
+        },
+      };
+
+      const mockTheme = {
+        fg: vi.fn((name, text) => text),
+        bold: vi.fn((text) => text),
+      };
+
+      const widget = renderResult(mockResult, { expanded: false }, mockTheme);
+
+      expect(widget).toBeDefined();
+      expect(widget.constructor.name).toBe("Text");
+      
+      // Check that theme methods were called
+      expect(mockTheme.fg).toHaveBeenCalled();
+      expect(mockTheme.bold).toHaveBeenCalled();
+    });
+
+    it("renderResult handles expanded state (full diff)", () => {
+      orchestrator(mockPi);
+
+      const calls = (mockPi.registerTool as any).mock.calls;
+      const reviewAgentCall = calls.find((call: any) => call[0].name === "review_agent");
+      const renderResult = reviewAgentCall[0].renderResult;
+
+      const mockResult = {
+        content: [{ type: "text", text: "Full output" }],
+        details: {
+          taskId: "task-456",
+          stat: " 1 file changed, 5 insertions(+)",
+          diff: "diff --git a/file.ts\n+added line",
+          fileCount: 1,
+          insertions: 5,
+          deletions: 0,
+        },
+      };
+
+      const mockTheme = {
+        fg: vi.fn((name, text) => text),
+        bold: vi.fn((text) => text),
+      };
+
+      const widget = renderResult(mockResult, { expanded: true }, mockTheme);
+
+      expect(widget).toBeDefined();
+      expect(widget.constructor.name).toBe("Text");
+      
+      // Check that theme methods were called
+      expect(mockTheme.fg).toHaveBeenCalled();
+      expect(mockTheme.bold).toHaveBeenCalled();
+    });
+
+    it("renderResult handles missing details gracefully", () => {
+      orchestrator(mockPi);
+
+      const calls = (mockPi.registerTool as any).mock.calls;
+      const reviewAgentCall = calls.find((call: any) => call[0].name === "review_agent");
+      const renderResult = reviewAgentCall[0].renderResult;
+
+      const mockResult = {
+        content: [{ type: "text", text: "Fallback text" }],
+      };
+
+      const mockTheme = {
+        fg: vi.fn((name, text) => text),
+        bold: vi.fn((text) => text),
+      };
+
+      const widget = renderResult(mockResult, { expanded: false }, mockTheme);
+
+      expect(widget).toBeDefined();
+      expect(widget.constructor.name).toBe("Text");
     });
   });
 });

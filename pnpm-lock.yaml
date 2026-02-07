@@ -18,6 +18,9 @@ importers:
         specifier: ^0.34.48
         version: 0.34.48
     devDependencies:
+      '@mariozechner/pi-tui':
+        specifier: ^0.52.8
+        version: 0.52.8
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.32
@@ -435,8 +438,8 @@ packages:
     engines: {node: '>=20.0.0'}
     hasBin: true
 
-  '@mariozechner/pi-tui@0.52.7':
-    resolution: {integrity: sha512-wS9zw4lvUaVU8jAGdk4C2KN/AwEsESrguUGNpZs7g9PD8iDBE9gnXtMvtny4PDbjOk0mZ5D0CEUgMzl/ZhqH8w==}
+  '@mariozechner/pi-tui@0.52.8':
+    resolution: {integrity: sha512-QCrzHlZhOPoFY5UMc2hhBj5tXSO81hWBXlC6jBrq+o0JA47pTGvbDtFtwsjbsVAxoQiEdFWqreqwnX3tCBKimQ==}
     engines: {node: '>=20.0.0'}
 
   '@mistralai/mistralai@1.10.0':
@@ -2287,7 +2290,7 @@ snapshots:
       '@mariozechner/jiti': 2.6.5
       '@mariozechner/pi-agent-core': 0.52.7(ws@8.19.0)(zod@3.25.76)
       '@mariozechner/pi-ai': 0.52.7(ws@8.19.0)(zod@3.25.76)
-      '@mariozechner/pi-tui': 0.52.7
+      '@mariozechner/pi-tui': 0.52.8
       '@silvia-odwyer/photon-node': 0.3.4
       chalk: 5.6.2
       cli-highlight: 2.1.11
@@ -2311,7 +2314,7 @@ snapshots:
       - ws
       - zod
 
-  '@mariozechner/pi-tui@0.52.7':
+  '@mariozechner/pi-tui@0.52.8':
     dependencies:
       '@types/mime-types': 2.1.4
       chalk: 5.6.2

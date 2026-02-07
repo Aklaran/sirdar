@@ -2,6 +2,7 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { createAgentSession } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { StringEnum } from "@mariozechner/pi-ai";
+import { Text } from "@mariozechner/pi-tui";
 import { join } from "path";
 import { homedir } from "os";
 
@@ -11,7 +12,20 @@ import { LifecycleManager } from "./lifecycle-manager.js";
 import { AgentPool, type AgentInfo } from "./agent-pool.js";
 import { WorktreeManager, type WorktreeInfo } from "./worktree-manager.js";
 import { selectModel } from "./model-selector.js";
+import { parseGitDiffStat } from "./git-diff-parser.js";
 import type { TaskDefinition, TaskTier } from "./types.js";
+
+/**
+ * Details returned by review_agent tool
+ */
+interface ReviewAgentDetails {
+  taskId: string;
+  stat: string;    // git diff --stat output
+  diff: string;    // full git diff output
+  fileCount: number;
+  insertions: number;
+  deletions: number;
+}
 
 /**
  * Orchestrator Extension for Pi
@@ -374,11 +388,45 @@ export default function orchestrator(pi: ExtensionAPI) {
         cwd: worktreeInfo.repoPath,
       });
       
+      // Parse stats
+      const stats = parseGitDiffStat(statResult.stdout);
+      
       const output = `# Diff for ${taskId}\n\n## Summary\n\n${statResult.stdout}\n\n## Full Diff\n\n${diffResult.stdout}`;
+      
+      const details: ReviewAgentDetails = {
+        taskId,
+        stat: statResult.stdout,
+        diff: diffResult.stdout,
+        fileCount: stats.fileCount,
+        insertions: stats.insertions,
+        deletions: stats.deletions,
+      };
       
       return {
         content: [{ type: "text", text: output }],
+        details,
       };
+    },
+    renderResult(result, { expanded }, theme) {
+      const details = result.details as ReviewAgentDetails | undefined;
+      
+      if (!details) {
+        const text = result.content[0]?.type === "text" ? result.content[0].text : "No diff available";
+        return new Text(text, 0, 0);
+      }
+      
+      // Collapsed: show stat summary only
+      if (!expanded) {
+        let summary = theme.fg("toolTitle", theme.bold(`Review: ${details.taskId}\n`));
+        summary += details.stat || "No changes";
+        return new Text(summary, 0, 0);
+      }
+      
+      // Expanded: show stat + full diff
+      let text = theme.fg("toolTitle", theme.bold(`Review: ${details.taskId}\n`));
+      text += details.stat + "\n\n";
+      text += details.diff || "No diff";
+      return new Text(text, 0, 0);
     },
   });
 
