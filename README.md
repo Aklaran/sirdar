@@ -1,6 +1,6 @@
-# Orchestrator Extension for Pi
+# Sirdar — Orchestrator Extension for Pi
 
-Multi-agent orchestration with budget tracking, memory logging, and git worktree isolation.
+Multi-agent orchestration for [Pi](https://github.com/badlogic/pi-mono) with budget tracking, memory logging, and git worktree isolation.
 
 ## Features
 
@@ -308,3 +308,4 @@ const logDir = join(homedir(), ".openclaw", "workspace", "memory");
 
 ```
 User: Please spawn an agent to add a hello world function to utils.ts
+## Part of [Himal](https://github.com/Aklaran/himal) 🏔️
