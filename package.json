@@ -1,0 +1,24 @@
+{
+  "name": "orchestrator",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Multi-agent orchestration extension for Pi coding agent",
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@mariozechner/pi-coding-agent": "latest",
+    "@sinclair/typebox": "^0.34.48"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
+  }
+}
