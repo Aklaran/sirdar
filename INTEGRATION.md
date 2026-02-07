@@ -20,6 +20,8 @@ The orchestrator extension is now fully wired and integrated. All components wor
 
 ### Registered Tools
 
+The extension registers 6 tools:
+
 #### 1. spawn_agent
 **Parameters:**
 - `description` (string) - Human-readable task description
@@ -32,10 +34,9 @@ The orchestrator extension is now fully wired and integrated. All components wor
 1. Generate unique task ID (`task-{timestamp}-{random}`)
 2. Build `TaskDefinition` from parameters
 3. Get model selection via `selectModel(tier)`
-4. Request user approval via `ApprovalManager` (uses `ctx.ui`)
-5. If approved and in git repo, create worktree for isolation
-6. Submit task to `AgentPool`
-7. Return confirmation with task ID, status, model, and thinking level
+4. If in git repo and `useWorktree=true`, create worktree for isolation (using rebase-based integration)
+5. Submit task to `AgentPool`
+6. Return confirmation with task ID, status, model, and thinking level
 
 #### 2. check_agents
 **Parameters:**
@@ -63,6 +64,29 @@ The orchestrator extension is now fully wired and integrated. All components wor
 - Calls appropriate `MemoryLogger` method based on type
 - Returns confirmation message
 
+#### 5. review_agent
+**Parameters:**
+- `taskId` (string, required) - Task ID of the agent to review
+
+**Execution:**
+- Looks up agent in pool
+- Verifies agent is completed or failed
+- Retrieves worktree info for the task
+- Runs `git diff main..{branchName}` to show changes
+- Returns diff summary and full diff output
+
+#### 6. merge_agent
+**Parameters:**
+- `taskId` (string, required) - Task ID of the agent to merge
+
+**Execution:**
+- Looks up agent in pool
+- Verifies agent is completed
+- Retrieves worktree info for the task
+- Calls `WorktreeManager.mergeWorktree()` to rebase and merge
+- Cleans up worktree on success
+- Returns success message or conflict details
+
 ### Registered Commands
 
 #### /agents
@@ -85,9 +109,12 @@ The orchestrator extension is now fully wired and integrated. All components wor
 2. Initialize `LifecycleManager` with runtime SDK dependencies
 3. Initialize `WorktreeManager` with shell execution wrapper
 4. Initialize `AgentPool` with event callbacks:
-   - **onComplete**: Log to memory, notify user, save budget
-   - **onFailed**: Log to memory, notify user with error, save budget
+   - **onComplete**: Log to memory, notify user, auto-wake parent agent with result, save budget
+   - **onFailed**: Log to memory, notify user with error, auto-wake parent agent with error, save budget
    - **onWarning**: Notify user of budget warnings
+
+**Auto-wake behavior:**
+When a subagent completes or fails, the extension calls `pi.sendMessage()` with `triggerTurn: true` and `deliverAs: "followUp"` to automatically wake the parent agent with the completion result. This enables the orchestrating agent to process results without requiring user input.
 
 ## Data Flow
 
@@ -101,9 +128,7 @@ Build TaskDefinition
   ↓
 Select model (based on tier)
   ↓
-Request approval (UI confirm dialog)
-  ↓
-Create worktree (if git repo + useWorktree=true)
+Create worktree (if git repo + useWorktree=true, using rebase-based integration)
   ↓
 Submit to AgentPool
   ↓
@@ -143,6 +168,8 @@ MemoryLogger logs completion
 BudgetTracker saves to disk
   ↓
 User notification via ctx.ui
+  ↓
+Parent agent auto-wakes with result (pi.sendMessage with triggerTurn: true)
   ↓
 If queued tasks exist: Start next task
 ```
@@ -209,22 +236,24 @@ BudgetTracker.save() - Append to history file
 
 ## Testing
 
-### Unit Tests (138 tests)
+### Unit Tests (162 tests)
 - `model-selector.test.ts` - Model selection logic
 - `budget-tracker.test.ts` - Budget tracking and thresholds
 - `approval.test.ts` - Approval UI formatting
 - `task-queue.test.ts` - Queue operations
 - `agent-pool.test.ts` - Pool management and queueing
 - `lifecycle-manager.test.ts` - Session lifecycle
-- `worktree-manager.test.ts` - Git worktree operations
+- `worktree-manager.test.ts` - Git worktree operations with rebase-based integration
 - `memory-logger.test.ts` - Log formatting and storage
+- `agent-callbacks.test.ts` - Agent event callbacks
+- `extension.test.ts` - Extension integration
 
-### Integration Tests (7 tests)
-- Tool registration (4 tools with correct parameters)
+### Integration Tests (12 tests)
+- Tool registration (6 tools with correct parameters)
 - Command registration (/agents)
 - Event handler registration (session_start)
 
-### Total: 144 passing tests ✅
+### Total: 174 passing tests ✅
 
 ## Usage Examples
 
@@ -279,12 +308,13 @@ BudgetTracker.save() - Append to history file
 
 The extension is production-ready with:
 - ✅ Full component integration
-- ✅ Comprehensive test coverage (144 tests)
+- ✅ Comprehensive test coverage (174 tests)
 - ✅ Budget tracking and warnings
 - ✅ Memory logging for reflection
-- ✅ Git worktree isolation
-- ✅ User approval flow
+- ✅ Git worktree isolation with rebase-based integration
+- ✅ Auto-wake on agent completion
 - ✅ Concurrent agent pool with queueing
+- ✅ Worktree review and merge tools
 
 Potential enhancements:
 - Add persistence for agent state (restart recovery)

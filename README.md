@@ -7,8 +7,8 @@ Multi-agent orchestration with budget tracking, memory logging, and git worktree
 - 🤖 **Spawn Sub-agents** - Create focused sub-agents for specific tasks with automatic model selection
 - 📊 **Budget Tracking** - Monitor token usage and costs per task tier with threshold warnings
 - 📝 **Memory Logging** - Log task completions, reflections, patterns, and ideas
-- 🌳 **Git Worktree Isolation** - Automatic worktree creation for safe concurrent development
-- ⚖️ **Approval Flow** - User confirmation before spawning agents
+- 🌳 **Git Worktree Isolation** - Automatic worktree creation with rebase-based integration
+- 🔔 **Auto-wake** - Parent agent automatically wakes when subagent completes or fails
 - 🔄 **Concurrent Pool** - Run up to 3 agents concurrently with automatic queueing
 
 ## Installation
@@ -43,7 +43,7 @@ pi -e ~/repos/orchestrator/src/index.ts
 
 ### Tools
 
-The extension provides 4 tools that the LLM can call:
+The extension provides 6 tools that the LLM can call:
 
 #### spawn_agent
 
@@ -104,6 +104,30 @@ Log a reflective note, pattern observation, or idea to the memory system.
 Use log_reflection to record this pattern: "Complex refactoring tasks often need multiple iterations"
 ```
 
+#### review_agent
+
+Shows the git diff of a completed agent's worktree branch vs main.
+
+**Parameters:**
+- `taskId` (required) - Task ID of the agent to review
+
+**Example:**
+```
+Use review_agent to show me what changed in task-1234567890-abcdef
+```
+
+#### merge_agent
+
+Merges a completed agent's branch into main and cleans up the worktree.
+
+**Parameters:**
+- `taskId` (required) - Task ID of the agent to merge
+
+**Example:**
+```
+Use merge_agent to integrate the changes from task-1234567890-abcdef into main
+```
+
 ### Commands
 
 #### /agents
@@ -119,6 +143,17 @@ Shows a selection menu with all agents. Select an agent to view:
 - Status and tier
 - Duration
 - Full result output or error
+
+### Auto-wake Behavior
+
+When a subagent completes or fails, the extension automatically wakes the parent agent by calling `pi.sendMessage()` with `triggerTurn: true` and `deliverAs: "followUp"`. This means the orchestrating agent processes results without requiring the user to send another message.
+
+The parent agent receives a message containing:
+- Task ID and description
+- Result output (truncated to 2000 characters)
+- Error details (for failed tasks)
+
+This enables workflows where the parent can spawn multiple agents and react to their completion automatically.
 
 ## Architecture
 
@@ -140,16 +175,16 @@ session_start Event
 ### Task Execution Flow
 
 ```
-1. User approves task (confirm dialog)
-2. Worktree created (if in git repo)
-3. Task submitted to AgentPool
-4. If pool has capacity → Start immediately
-5. If pool full → Queue task
-6. LifecycleManager creates agent session
-7. Agent executes with model and thinking level
-8. Result logged to memory
-9. Budget tracked and saved
-10. User notified of completion
+1. Worktree created (if in git repo)
+2. Task submitted to AgentPool
+3. If pool has capacity → Start immediately
+4. If pool full → Queue task
+5. LifecycleManager creates agent session
+6. Agent executes with model and thinking level
+7. Result logged to memory
+8. Budget tracked and saved
+9. User notified of completion
+10. Parent agent auto-wakes with completion result
 11. Next queued task starts (if any)
 ```
 
@@ -184,7 +219,7 @@ pnpm install
 ### Testing
 
 ```bash
-# Run all tests (144 tests)
+# Run all tests (174 tests across 11 test files)
 pnpm test
 
 # Run specific test file
