@@ -11,6 +11,7 @@ export function createMockPi(): ExtensionAPI {
     registerCommand: vi.fn(),
     exec: vi.fn().mockResolvedValue({ stdout: "", stderr: "", code: 0 }),
     appendEntry: vi.fn(),
+    sendMessage: vi.fn(),
     events: { 
       on: vi.fn(), 
       emit: vi.fn() 

@@ -640,6 +640,16 @@ export default function orchestrator(pi: ExtensionAPI) {
             }
           }
           
+          // Wake up parent agent with completion notification
+          pi.sendMessage({
+            customType: "orchestrator-agent-complete",
+            content: `Agent completed: ${info.taskId}\nDescription: ${info.description}\nResult: ${info.result?.output?.substring(0, 2000) || "No output"}`,
+            display: false,
+          }, {
+            triggerTurn: true,
+            deliverAs: "followUp",
+          });
+          
           // Save budget after each task
           await budgetTracker.save();
         },
@@ -672,6 +682,16 @@ export default function orchestrator(pi: ExtensionAPI) {
               ctx.ui.setStatus("orchestrator", status);
             }
           }
+          
+          // Wake up parent agent with failure notification
+          pi.sendMessage({
+            customType: "orchestrator-agent-failed",
+            content: `Agent failed: ${info.taskId}\nDescription: ${info.description}\nError: ${info.result?.error || "Unknown error"}\nOutput: ${info.result?.output?.substring(0, 2000) || "No output"}`,
+            display: false,
+          }, {
+            triggerTurn: true,
+            deliverAs: "followUp",
+          });
           
           // Save budget after each task
           await budgetTracker.save();
