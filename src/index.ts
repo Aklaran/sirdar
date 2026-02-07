@@ -439,43 +439,7 @@ export default function orchestrator(pi: ExtensionAPI) {
         state.trackFile(filePath, original, current);
       }
       
-      const modal = new DiffReviewModal(state);
-      
-      // Open overlay if UI available
-      if (ctx.hasUI) {
-        await ctx.ui.custom<void>(
-          (tui, theme, _keybindings, done) => {
-            const highlightProvider = (code: string, fp: string): string => {
-              const lang = getLanguageFromPath(fp);
-              if (!lang) return code;
-              try {
-                return highlightCode(code, lang, theme);
-              } catch {
-                return code;
-              }
-            };
-            const keyUtils = { matchesKey, Key, truncateToWidth };
-            return createOverlayHandler(
-              modal,
-              tui,
-              theme,
-              keyUtils,
-              highlightProvider,
-              done,
-              undefined,
-              {
-                title: `Review: ${taskId}`,
-              }
-            );
-          },
-          {
-            overlay: true,
-            overlayOptions: { anchor: "center", width: "90%", minWidth: 60, margin: 1 },
-          }
-        );
-      }
-      
-      // Still return text summary for the conversation
+      // Return text summary — use Ctrl+Shift+A to browse diffs interactively
       const stats = parseGitDiffStat(statResult.stdout);
       return {
         content: [
