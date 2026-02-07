@@ -54,7 +54,7 @@ export class LifecycleManager {
   /**
    * Spawn a subagent, wait for completion, return result
    */
-  async runTask(task: TaskDefinition): Promise<TaskResult> {
+  async runTask(task: TaskDefinition, onOutput?: (delta: string) => void): Promise<TaskResult> {
     const startTime = Date.now();
     let outputText = "";
     let session: any = null;
@@ -99,7 +99,9 @@ export class LifecycleManager {
           event.type === "message_update" &&
           event.assistantMessageEvent?.type === "text_delta"
         ) {
-          outputText += event.assistantMessageEvent.delta;
+          const delta = event.assistantMessageEvent.delta;
+          outputText += delta;
+          onOutput?.(delta);
         }
       });
 

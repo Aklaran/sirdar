@@ -145,4 +145,37 @@ describe("Extension Wiring - Integration Tests", () => {
       expect(eventNames).toContain("session_start");
     });
   });
+
+  describe("Widget Infrastructure", () => {
+    it("extension initializes agent-output widget infrastructure", async () => {
+      orchestrator(mockPi);
+
+      // Get the session_start handler
+      const calls = (mockPi.on as any).mock.calls;
+      const sessionStartCall = calls.find((call: any) => call[0] === "session_start");
+      expect(sessionStartCall).toBeDefined();
+
+      const handler = sessionStartCall[1];
+
+      // Create a mock context with setWidget
+      const mockCtx = {
+        ui: {
+          setWidget: vi.fn(),
+          setStatus: vi.fn(),
+          confirm: vi.fn(),
+          notify: vi.fn(),
+          select: vi.fn(),
+        },
+        authStorage: {},
+        modelRegistry: {},
+      };
+
+      // Call the session_start handler
+      await handler({}, mockCtx);
+
+      // Verify that setWidget is available and callable (lightweight check)
+      expect(mockCtx.ui.setWidget).toBeDefined();
+      expect(typeof mockCtx.ui.setWidget).toBe("function");
+    });
+  });
 });

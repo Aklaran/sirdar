@@ -23,6 +23,7 @@ export interface AgentPoolEvents {
   onComplete: (info: AgentInfo) => void;
   onFailed: (info: AgentInfo) => void;
   onWarning: (warning: BudgetWarning) => void;
+  onOutput?: (taskId: string, delta: string) => void;
 }
 
 export class AgentPool {
@@ -72,7 +73,10 @@ export class AgentPool {
 
     // Start the task (fire and forget)
     this.lifecycleManager
-      .runTask(task)
+      .runTask(task, (delta: string) => {
+        // Forward output to the events callback
+        this.events.onOutput?.(task.id, delta);
+      })
       .then((result) => {
         this.handleTaskComplete(task, info, result);
       })

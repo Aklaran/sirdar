@@ -13,6 +13,53 @@ describe("LifecycleManager", () => {
   });
 
   describe("runTask", () => {
+    it("calls onOutput callback with text deltas", async () => {
+      const mockSession = createMockSession({ outputText: "Hello World" });
+      const mockCreateSession = createMockSessionFactory(mockSession);
+
+      const manager = new LifecycleManager({
+        createSession: mockCreateSession,
+        authStorage: mockAuthStorage,
+        modelRegistry: mockModelRegistry,
+      });
+
+      const task: TaskDefinition = {
+        id: "test-task-123",
+        prompt: "Do something",
+        tier: "light",
+        description: "Test task",
+      };
+
+      const onOutputMock = vi.fn();
+      await manager.runTask(task, onOutputMock);
+
+      // onOutput should have been called with the delta text
+      expect(onOutputMock).toHaveBeenCalledWith("Hello World");
+    });
+
+    it("works without onOutput callback", async () => {
+      const mockSession = createMockSession({ outputText: "Hello World" });
+      const mockCreateSession = createMockSessionFactory(mockSession);
+
+      const manager = new LifecycleManager({
+        createSession: mockCreateSession,
+        authStorage: mockAuthStorage,
+        modelRegistry: mockModelRegistry,
+      });
+
+      const task: TaskDefinition = {
+        id: "test-task-123",
+        prompt: "Do something",
+        tier: "light",
+        description: "Test task",
+      };
+
+      // Should not throw when onOutput is undefined
+      const result = await manager.runTask(task);
+      expect(result.success).toBe(true);
+      expect(result.output).toBe("Hello World");
+    });
+
     it("returns a TaskResult with correct taskId", async () => {
       const mockSession = createMockSession();
       const mockCreateSession = createMockSessionFactory(mockSession);
