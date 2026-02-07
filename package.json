@@ -17,7 +17,7 @@
     "@mariozechner/pi-ai": "latest",
     "@mariozechner/pi-coding-agent": "latest",
     "@sinclair/typebox": "^0.34.48",
-    "pi-diff-ui": "file:/home/annapurna/repos/pi-diff-ui"
+    "pi-diff-ui": "file:../pi-diff-ui"
   },
   "devDependencies": {
     "@mariozechner/pi-tui": "^0.52.8",

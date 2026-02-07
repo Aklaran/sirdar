@@ -18,8 +18,8 @@ importers:
         specifier: ^0.34.48
         version: 0.34.48
       pi-diff-ui:
-        specifier: file:/home/annapurna/repos/pi-diff-ui
-        version: file:../../../pi-diff-ui
+        specifier: file:../pi-diff-ui
+        version: file:../pi-diff-ui
     devDependencies:
       '@mariozechner/pi-tui':
         specifier: ^0.52.8
@@ -1366,8 +1366,8 @@ packages:
   pathval@1.1.1:
     resolution: {integrity: sha512-Dp6zGqpTdETdR63lehJYPeIOqpiNBNtc7BpWSLrOje7UaIsE5aY92r/AunQA7rsXvet3lrJ3JnZX29UPTKXyKQ==}
 
-  pi-diff-ui@file:../../../pi-diff-ui:
-    resolution: {directory: ../../../pi-diff-ui, type: directory}
+  pi-diff-ui@file:../pi-diff-ui:
+    resolution: {directory: ../pi-diff-ui, type: directory}
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
@@ -3307,7 +3307,7 @@ snapshots:
 
   pathval@1.1.1: {}
 
-  pi-diff-ui@file:../../../pi-diff-ui:
+  pi-diff-ui@file:../pi-diff-ui:
     dependencies:
       diff: 7.0.0
 

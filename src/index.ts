@@ -449,8 +449,7 @@ export default function orchestrator(pi: ExtensionAPI) {
               const lang = getLanguageFromPath(fp);
               if (!lang) return code;
               try {
-                const lines = highlightCode(code, lang);
-                return lines.join("\n");
+                return highlightCode(code, lang, theme);
               } catch {
                 return code;
               }
