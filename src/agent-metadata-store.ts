@@ -16,13 +16,18 @@ export interface SerializedAgentMetadata {
   agents: AgentMetadata[];
 }
 
+/**
+ * Persists metadata about completed subagents (task ID, description, tier, branch)
+ * to disk. Used by the Ctrl+Shift+A agent browser to list agents for diff review.
+ */
 export class AgentMetadataStore {
   private agents: Map<string, AgentMetadata> = new Map();
 
   constructor(private persistPath: string) {}
 
   /**
-   * Add agent metadata to the store
+   * Add agent metadata to the store and persist to disk.
+   * @param meta - The agent metadata to store
    */
   add(meta: AgentMetadata): void {
     this.agents.set(meta.taskId, meta);
@@ -30,7 +35,8 @@ export class AgentMetadataStore {
   }
 
   /**
-   * Get all agents sorted by completedAt descending (most recent first)
+   * Get all agents sorted by completedAt descending (most recent first).
+   * @returns Array of all agent metadata in reverse chronological order
    */
   getAll(): AgentMetadata[] {
     const agents = Array.from(this.agents.values());
@@ -38,21 +44,36 @@ export class AgentMetadataStore {
   }
 
   /**
-   * Get only completed agents sorted by completedAt descending
+   * Get only completed agents sorted by completedAt descending (most recent first).
+   * @returns Array of completed agent metadata in reverse chronological order
    */
   getCompleted(): AgentMetadata[] {
     return this.getAll().filter(agent => agent.status === "completed");
   }
 
   /**
-   * Get specific agent by taskId
+   * Get specific agent metadata by task ID.
+   * @param taskId - The task ID to retrieve
+   * @returns Agent metadata if found, undefined otherwise
    */
   get(taskId: string): AgentMetadata | undefined {
     return this.agents.get(taskId);
   }
 
   /**
-   * Save to disk synchronously
+   * Remove an agent from the store and persist to disk.
+   * @param taskId - The task ID to remove
+   * @returns true if the agent was removed, false if it didn't exist
+   */
+  remove(taskId: string): boolean {
+    const deleted = this.agents.delete(taskId);
+    if (deleted) this.save();
+    return deleted;
+  }
+
+  /**
+   * Serialize and persist agent metadata to disk synchronously.
+   * Creates the directory structure if needed and fails silently on errors.
    */
   save(): void {
     try {
@@ -77,7 +98,8 @@ export class AgentMetadataStore {
   }
 
   /**
-   * Load from disk
+   * Load and deserialize agent metadata from disk.
+   * Initializes with empty store if file doesn't exist or is invalid.
    */
   load(): void {
     try {
