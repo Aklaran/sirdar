@@ -304,4 +304,34 @@ describe("AgentMetadataStore", () => {
       expect(finalStore.get("task-2")).toBeDefined();
     });
   });
+
+  describe("remove", () => {
+    it("removes an agent and persists", () => {
+      const meta: AgentMetadata = {
+        taskId: "task-1",
+        description: "Test",
+        tier: "light",
+        branchName: "b1",
+        repoPath: "/tmp",
+        status: "completed",
+        completedAt: 1000,
+      };
+      store.add(meta);
+      expect(store.get("task-1")).toBeDefined();
+
+      const removed = store.remove("task-1");
+      expect(removed).toBe(true);
+      expect(store.get("task-1")).toBeUndefined();
+      expect(store.getAll()).toHaveLength(0);
+
+      // Verify persisted
+      const store2 = new AgentMetadataStore(persistPath);
+      store2.load();
+      expect(store2.get("task-1")).toBeUndefined();
+    });
+
+    it("returns false for nonexistent taskId", () => {
+      expect(store.remove("nonexistent")).toBe(false);
+    });
+  });
 });

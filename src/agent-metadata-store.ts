@@ -3,6 +3,7 @@ import { dirname } from "path";
 
 export interface AgentMetadata {
   taskId: string;
+  /** Human-readable description of the task this agent performed. */
   description: string;
   tier: string;
   branchName: string;

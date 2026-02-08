@@ -13,6 +13,7 @@ import { AgentMetadataStore } from "./agent-metadata-store.js";
 import { MemoryLogger } from "./memory-logger.js";
 import { LifecycleManager } from "./lifecycle-manager.js";
 import { AgentPool, type AgentInfo } from "./agent-pool.js";
+import { getAgentStatusText } from "./status-text.js";
 import { WorktreeManager, type WorktreeInfo } from "./worktree-manager.js";
 import { selectModel } from "./model-selector.js";
 import { parseGitDiffStat } from "./git-diff-parser.js";
@@ -50,15 +51,13 @@ export default function orchestrator(pi: ExtensionAPI) {
   const logDir = join(homedir(), ".openclaw", "workspace", "memory");
 
   /**
-   * Build a status text for agent pool
+   * Build status text from live pool + metadata store
    */
-  function getAgentStatusText(pool: AgentPool): string | undefined {
-    const running = pool.runningCount();
-    const queued = pool.queuedCount();
-    if (running === 0 && queued === 0) return undefined;
-    let text = `🤖 ${running} running`;
-    if (queued > 0) text += `, ${queued} queued`;
-    return text;
+  function getStatus(): string | undefined {
+    const running = agentPool?.runningCount() ?? 0;
+    const queued = agentPool?.queuedCount() ?? 0;
+    const reviewCount = metadataStore?.getCompleted().length ?? 0;
+    return getAgentStatusText(running, queued, reviewCount);
   }
 
   /**
@@ -199,7 +198,7 @@ export default function orchestrator(pi: ExtensionAPI) {
       
       // Update status if UI is available
       if (uiContext?.ui) {
-        const status = getAgentStatusText(agentPool);
+        const status = getStatus();
         uiContext.ui.setStatus("orchestrator", status);
       }
       
@@ -657,106 +656,128 @@ export default function orchestrator(pi: ExtensionAPI) {
         return;
       }
       
-      await ctx.ui.custom<void>(
-        (tui, theme, _keybindings, done) => {
-          // Build picker items from metadata
-          const items: PickerItem[] = completed.map(agent => ({
-            id: agent.taskId,
-            label: agent.description,
-            meta: agent.tier,
-          }));
-          
-          // State machine: 'picker' | 'diff'
-          let mode: "picker" | "diff" = "picker";
-          let activeHandler: { render: (w: number) => string[]; handleInput: (d: string) => boolean; invalidate?: () => void };
-          
-          const keyUtils = { matchesKey, Key, truncateToWidth };
-          
-          const highlightProvider = (code: string, fp: string): string => {
-            const lang = getLanguageFromPath(fp);
-            if (!lang) return code;
-            try { 
-              return highlightCode(code, lang, theme);
-            } catch { 
-              return code; 
-            }
-          };
-          
-          // Switch to diff view for a specific agent
-          function showAgentDiff(agentMeta: typeof completed[0]) {
-            // Load diff from git
-            const state = new DiffState();
-            const execSync = require("node:child_process").execSync;
-            
-            // Get changed files
-            let changedFiles: string[];
-            try {
-              const output = execSync(
-                `git diff main..${agentMeta.branchName} --name-only`,
-                { cwd: agentMeta.repoPath, encoding: "utf-8" }
-              );
-              changedFiles = output.trim().split("\n").filter((f: string) => f.length > 0);
-            } catch {
-              changedFiles = [];
-            }
-            
-            for (const filePath of changedFiles) {
-              let original = "";
-              let current = "";
-              try {
-                original = execSync(`git show main:${filePath}`, { cwd: agentMeta.repoPath, encoding: "utf-8" });
-              } catch { /* new file */ }
-              try {
-                current = execSync(`git show ${agentMeta.branchName}:${filePath}`, { cwd: agentMeta.repoPath, encoding: "utf-8" });
-              } catch { /* deleted file */ }
-              state.trackFile(filePath, original, current);
-            }
-            
-            if (state.pendingCount === 0) {
-              // No changes, stay in picker
-              return;
-            }
+      // Two sequential ctx.ui.custom() calls instead of internal mode switching.
+      // Each overlay gets a clean lifecycle (showOverlay → hideOverlay).
+      // This avoids ghost overlay artifacts from swapping handlers inside a single overlay.
+      const overlayOpts = { overlay: true, overlayOptions: { anchor: "top-center" as const, width: "90%" as const, minWidth: 60, margin: { top: 1, left: 1, right: 1, bottom: 1 } } };
+      
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        // Build picker items fresh each iteration (agent list could change)
+        const items: PickerItem[] = completed.map(agent => ({
+          id: agent.taskId,
+          label: agent.description,
+          meta: agent.tier,
+        }));
+        
+        // Phase 1: Show picker, get selection or cancel
+        const selectedId = await ctx.ui.custom<string | null>(
+          (tui, theme, _keybindings, done) => {
+            const keyUtils = { matchesKey, Key, truncateToWidth };
+            const handler = createPickerHandler(
+              items, tui, theme, keyUtils,
+              {
+                onSelect: (item) => done(item.id),
+                onCancel: () => done(null),
+                onDismiss: (item) => {
+                  const removed = metadataStore!.remove(item.id);
+                  if (removed) {
+                    // Also remove from the completed array so the loop rebuilds correctly
+                    const idx = completed.findIndex(a => a.taskId === item.id);
+                    if (idx !== -1) completed.splice(idx, 1);
+                    // Update status bar (review count changed)
+                    if (ctx.ui) ctx.ui.setStatus("orchestrator", getStatus());
+                  }
+                  return removed;
+                },
+              },
+              { title: "Agent Diffs" }
+            );
+            return {
+              render: (width: number) => handler.render(width),
+              handleInput: (data: string) => { handler.handleInput(data); },
+              invalidate: () => { handler.invalidate?.(); },
+            };
+          },
+          overlayOpts,
+        );
+        
+        // User cancelled the picker
+        if (!selectedId) break;
+        
+        const agentMeta = metadataStore!.get(selectedId);
+        if (!agentMeta) continue;
+        
+        // Load diff from git
+        const state = new DiffState();
+        const execSync = require("node:child_process").execSync;
+        
+        const gitOpts = { cwd: agentMeta.repoPath, encoding: "utf-8" as const, stdio: ["pipe", "pipe", "pipe"] as const };
+        
+        let changedFiles: string[];
+        try {
+          const output = execSync(
+            `git diff main..${agentMeta.branchName} --name-only`,
+            gitOpts,
+          ) as string;
+          changedFiles = output.trim().split("\n").filter((f: string) => f.length > 0);
+        } catch {
+          changedFiles = [];
+        }
+        
+        for (const filePath of changedFiles) {
+          let original = "";
+          let current = "";
+          try {
+            original = execSync(`git show main:${filePath}`, gitOpts) as string;
+          } catch { /* new file */ }
+          try {
+            current = execSync(`git show ${agentMeta.branchName}:${filePath}`, gitOpts) as string;
+          } catch { /* deleted file */ }
+          state.trackFile(filePath, original, current);
+        }
+        
+        if (state.pendingCount === 0) {
+          ctx.ui.notify("No changes in this agent's branch", "info");
+          continue;
+        }
+        
+        // Phase 2: Show diff overlay. When user closes it, loop back to picker.
+        await ctx.ui.custom<void>(
+          (tui, theme, _keybindings, done) => {
+            const keyUtils = { matchesKey, Key, truncateToWidth };
+            const highlightProvider = (code: string, fp: string): string => {
+              const lang = getLanguageFromPath(fp);
+              if (!lang) return code;
+              try { return highlightCode(code, lang).join("\n"); }
+              catch { return code; }
+            };
             
             const modal = new DiffReviewModal(state);
-            mode = "diff";
-            activeHandler = createOverlayHandler(
+            const handler = createOverlayHandler(
               modal, tui, theme, keyUtils, highlightProvider,
-              () => {
-                // When diff overlay closes (q), go back to picker
-                mode = "picker";
-                activeHandler = pickerHandler;
-              },
+              () => done(),
               undefined,
               { title: `Agent: ${agentMeta.description}` }
             );
-          }
-          
-          // Create the picker handler
-          const pickerHandler = createPickerHandler(
-            items, tui, theme, keyUtils,
-            {
-              onSelect: (item) => {
-                const agent = metadataStore!.get(item.id);
-                if (agent) showAgentDiff(agent);
-              },
-              onCancel: () => done(),
-            },
-            { title: "Agent Diffs" }
-          );
-          
-          activeHandler = pickerHandler;
-          
-          return {
-            render: (width: number) => activeHandler.render(width),
-            handleInput: (data: string) => activeHandler.handleInput(data),
-            invalidate: () => { activeHandler.invalidate?.(); },
-          };
-        },
-        {
-          overlay: true,
-          overlayOptions: { anchor: "center", width: "90%", minWidth: 60, margin: 1 },
+            return {
+              render: (width: number) => handler.render(width),
+              handleInput: (data: string) => { handler.handleInput(data); },
+              invalidate: () => { handler.invalidate?.(); },
+            };
+          },
+          overlayOpts,
+        );
+        // Diff closed — if all files were dismissed, auto-remove agent from picker
+        if (state.pendingCount === 0) {
+          metadataStore!.remove(selectedId);
+          const idx = completed.findIndex(a => a.taskId === selectedId);
+          if (idx !== -1) completed.splice(idx, 1);
+          // Update status bar (review count changed)
+          if (ctx.ui) ctx.ui.setStatus("orchestrator", getStatus());
+          if (completed.length === 0) break;
         }
-      );
+      }
     },
   });
 
@@ -862,7 +883,7 @@ export default function orchestrator(pi: ExtensionAPI) {
 
             // Update status
             if (agentPool) {
-              const status = getAgentStatusText(agentPool);
+              const status = getStatus();
               ctx.ui.setStatus("orchestrator", status);
             }
           }
@@ -921,7 +942,7 @@ export default function orchestrator(pi: ExtensionAPI) {
 
             // Update status 
             if (agentPool) {
-              const status = getAgentStatusText(agentPool);
+              const status = getStatus();
               ctx.ui.setStatus("orchestrator", status);
             }
           }

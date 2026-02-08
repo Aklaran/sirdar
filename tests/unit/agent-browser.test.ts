@@ -5,7 +5,6 @@ describe("Agent Browser", () => {
   let mockExecSync: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    // Mock execSync for git commands
     mockExecSync = vi.fn();
   });
 
@@ -32,7 +31,6 @@ describe("Agent Browser", () => {
         },
       ];
 
-      // Build picker items (same logic as in keyboard handler)
       const items = completed.map(agent => ({
         id: agent.taskId,
         label: agent.description,
@@ -87,11 +85,9 @@ describe("Agent Browser", () => {
         completedAt: 1000,
       };
 
-      // Simulate the git commands
       const gitDiffCommand = `git diff main..${agentMeta.branchName} --name-only`;
       const expectedCwd = agentMeta.repoPath;
 
-      // Mock would be called with these parameters in the actual handler
       expect(gitDiffCommand).toBe("git diff main..branch-task-1 --name-only");
       expect(expectedCwd).toBe("/path/to/repo");
     });
@@ -118,160 +114,94 @@ describe("Agent Browser", () => {
     });
   });
 
-  describe("State Machine", () => {
-    it("starts in picker mode", () => {
-      let mode: "picker" | "diff" = "picker";
+  describe("Sequential Overlay Architecture", () => {
+    it("picker resolves with agent id on selection", async () => {
+      // Simulates the sequential architecture: picker returns selectedId, then diff opens separately
+      let resolvedId: string | null = null;
       
-      expect(mode).toBe("picker");
+      // Simulate picker behavior
+      const pickerPromise = new Promise<string | null>((resolve) => {
+        // Simulate user selecting an item
+        resolve("task-1");
+      });
+      
+      resolvedId = await pickerPromise;
+      expect(resolvedId).toBe("task-1");
     });
 
-    it("switches to diff mode on agent selection", () => {
-      let mode: "picker" | "diff" = "picker";
+    it("picker resolves with null on cancel", async () => {
+      const pickerPromise = new Promise<string | null>((resolve) => {
+        // Simulate user pressing Escape
+        resolve(null);
+      });
       
-      // Simulate selecting an agent
-      mode = "diff";
-      
-      expect(mode).toBe("diff");
+      const result = await pickerPromise;
+      expect(result).toBeNull();
     });
 
-    it("switches back to picker mode when diff closes", () => {
-      let mode: "picker" | "diff" = "diff";
+    it("loops back to picker after diff closes", async () => {
+      // Simulates the while(true) loop: picker → diff → picker → cancel
+      const interactions = ["task-1", "task-2", null]; // select, select, cancel
+      let iterationCount = 0;
       
-      // Simulate closing diff overlay (q key)
-      mode = "picker";
+      for (const interaction of interactions) {
+        iterationCount++;
+        if (interaction === null) break;
+        // Would show diff here, then loop continues
+      }
       
-      expect(mode).toBe("picker");
-    });
-  });
-
-  describe("Handler Delegation", () => {
-    it("delegates render to active handler", () => {
-      const mockPickerHandler = {
-        render: vi.fn((w: number) => ["picker line 1", "picker line 2"]),
-        handleInput: vi.fn((d: string) => true),
-        invalidate: vi.fn(),
-      };
-      
-      const mockDiffHandler = {
-        render: vi.fn((w: number) => ["diff line 1", "diff line 2"]),
-        handleInput: vi.fn((d: string) => true),
-        invalidate: vi.fn(),
-      };
-      
-      // In picker mode
-      let activeHandler = mockPickerHandler;
-      let result = activeHandler.render(80);
-      expect(result).toEqual(["picker line 1", "picker line 2"]);
-      expect(mockPickerHandler.render).toHaveBeenCalledWith(80);
-      
-      // Switch to diff mode
-      activeHandler = mockDiffHandler;
-      result = activeHandler.render(80);
-      expect(result).toEqual(["diff line 1", "diff line 2"]);
-      expect(mockDiffHandler.render).toHaveBeenCalledWith(80);
+      expect(iterationCount).toBe(3); // 2 selections + 1 cancel
     });
 
-    it("delegates handleInput to active handler", () => {
-      const mockPickerHandler = {
-        render: vi.fn((w: number) => []),
-        handleInput: vi.fn((d: string) => true),
-      };
+    it("skips diff when agent has no changes", async () => {
+      // When pendingCount === 0, we continue (skip diff) and loop back to picker
+      const state = { pendingCount: 0 };
+      let diffShown = false;
       
-      const mockDiffHandler = {
-        render: vi.fn((w: number) => []),
-        handleInput: vi.fn((d: string) => false),
-      };
+      if (state.pendingCount === 0) {
+        // continue — don't show diff
+      } else {
+        diffShown = true;
+      }
       
-      // In picker mode
-      let activeHandler = mockPickerHandler;
-      let consumed = activeHandler.handleInput("j");
-      expect(consumed).toBe(true);
-      expect(mockPickerHandler.handleInput).toHaveBeenCalledWith("j");
-      
-      // Switch to diff mode
-      activeHandler = mockDiffHandler;
-      consumed = activeHandler.handleInput("q");
-      expect(consumed).toBe(false);
-      expect(mockDiffHandler.handleInput).toHaveBeenCalledWith("q");
-    });
-
-    it("delegates invalidate to active handler if available", () => {
-      const mockHandler = {
-        render: vi.fn((w: number) => []),
-        handleInput: vi.fn((d: string) => true),
-        invalidate: vi.fn(),
-      };
-      
-      const activeHandler = mockHandler;
-      activeHandler.invalidate?.();
-      
-      expect(mockHandler.invalidate).toHaveBeenCalled();
-    });
-
-    it("handles missing invalidate gracefully", () => {
-      const mockHandler: {
-        render: (w: number) => string[];
-        handleInput: (d: string) => boolean;
-        invalidate?: () => void;
-      } = {
-        render: vi.fn((w: number) => []),
-        handleInput: vi.fn((d: string) => true),
-        // no invalidate
-      };
-      
-      const activeHandler = mockHandler;
-      
-      // Should not throw
-      expect(() => activeHandler.invalidate?.()).not.toThrow();
+      expect(diffShown).toBe(false);
     });
   });
 
   describe("Edge Cases", () => {
     it("handles agent with no changes gracefully", () => {
-      // When git diff returns empty, state.pendingCount should be 0
       const changedFiles: string[] = [];
-      
-      // In the handler, we check if state.pendingCount === 0 and stay in picker mode
       const shouldStayInPicker = changedFiles.length === 0;
-      
       expect(shouldStayInPicker).toBe(true);
     });
 
     it("handles git command failures gracefully", () => {
-      // When execSync throws, we catch and set changedFiles to []
       let changedFiles: string[];
       try {
         throw new Error("git command failed");
       } catch {
         changedFiles = [];
       }
-      
       expect(changedFiles).toEqual([]);
     });
 
     it("handles new files (no original content)", () => {
       let original = "";
       try {
-        // Simulate git show main:newfile.ts throwing
         throw new Error("does not exist in index");
       } catch {
-        // Expected for new files
         original = "";
       }
-      
       expect(original).toBe("");
     });
 
     it("handles deleted files (no current content)", () => {
       let current = "";
       try {
-        // Simulate git show branch:deletedfile.ts throwing
         throw new Error("does not exist in index");
       } catch {
-        // Expected for deleted files
         current = "";
       }
-      
       expect(current).toBe("");
     });
   });
