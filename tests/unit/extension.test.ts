@@ -36,12 +36,13 @@ describe("Orchestrator Extension", () => {
     orchestrator(mockPi);
 
     // Verify registerCommand was called
-    expect(mockPi.registerCommand).toHaveBeenCalledTimes(1);
+    expect(mockPi.registerCommand).toHaveBeenCalledTimes(2);
 
-    // Extract the registered command name
+    // Extract the registered command names
     const calls = (mockPi.registerCommand as any).mock.calls;
-    const commandName = calls[0][0];
+    const commandNames = calls.map((c: any) => c[0]);
 
-    expect(commandName).toBe("agents");
+    expect(commandNames).toContain("agents");
+    expect(commandNames).toContain("diff-subagent");
   });
 });

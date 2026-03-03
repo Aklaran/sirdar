@@ -135,12 +135,13 @@ describe("Extension Wiring - Integration Tests", () => {
     it("registers /agents command", () => {
       orchestrator(mockPi);
 
-      expect(mockPi.registerCommand).toHaveBeenCalledTimes(1);
+      expect(mockPi.registerCommand).toHaveBeenCalledTimes(2);
 
       const calls = (mockPi.registerCommand as any).mock.calls;
-      const commandName = calls[0][0];
+      const commandNames = calls.map((c: any) => c[0]);
 
-      expect(commandName).toBe("agents");
+      expect(commandNames).toContain("agents");
+      expect(commandNames).toContain("diff-subagent");
     });
   });
 

@@ -1,6 +1,12 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "fs";
 import { dirname } from "path";
 
+export interface FileDiff {
+  path: string;
+  original: string;
+  current: string;
+}
+
 export interface AgentMetadata {
   taskId: string;
   /** Human-readable description of the task this agent performed. */
@@ -10,6 +16,8 @@ export interface AgentMetadata {
   repoPath: string;
   status: "completed" | "failed";
   completedAt: number; // Date.now()
+  /** Snapshot of file diffs captured at completion time */
+  diffs?: FileDiff[];
 }
 
 export interface SerializedAgentMetadata {

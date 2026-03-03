@@ -9,7 +9,7 @@ import { DiffState, DiffReviewModal, createOverlayHandler, createPickerHandler }
 import type { PickerItem, PickerCallbacks } from "pi-diff-ui";
 
 import { BudgetTracker } from "./budget-tracker.js";
-import { AgentMetadataStore } from "./agent-metadata-store.js";
+import { AgentMetadataStore, type FileDiff } from "./agent-metadata-store.js";
 import { MemoryLogger } from "./memory-logger.js";
 import { LifecycleManager } from "./lifecycle-manager.js";
 import { AgentPool, type AgentInfo } from "./agent-pool.js";
@@ -41,6 +41,35 @@ interface ReviewAgentDetails {
  * - log_reflection: Log reflections, patterns, and ideas
  * - /agents: Command to list and manage agents
  */
+
+/**
+ * Snapshot file diffs from a worktree branch vs main while both still exist.
+ */
+async function snapshotDiffs(wt: WorktreeInfo): Promise<FileDiff[]> {
+  const { execSync } = require("node:child_process");
+  const gitOpts = { cwd: wt.repoPath, encoding: "utf-8" as const, stdio: ["pipe", "pipe", "pipe"] as const };
+
+  let changedFiles: string[];
+  try {
+    const output = execSync(
+      `git diff main..${wt.branchName} --name-only`,
+      gitOpts,
+    ) as string;
+    changedFiles = output.trim().split("\n").filter((f: string) => f.length > 0);
+  } catch {
+    return [];
+  }
+
+  const diffs: FileDiff[] = [];
+  for (const filePath of changedFiles) {
+    let original = "";
+    let current = "";
+    try { original = execSync(`git show main:${filePath}`, gitOpts) as string; } catch { /* new file */ }
+    try { current = execSync(`git show ${wt.branchName}:${filePath}`, gitOpts) as string; } catch { /* deleted */ }
+    diffs.push({ path: filePath, original, current });
+  }
+  return diffs;
+}
 
 export default function orchestrator(pi: ExtensionAPI) {
   // ============================================================================
@@ -640,9 +669,7 @@ export default function orchestrator(pi: ExtensionAPI) {
   // 7. Register keyboard shortcuts
   // ============================================================================
   
-  pi.registerShortcut("ctrl+shift+a", {
-    description: "Browse agent diffs",
-    handler: async (ctx) => {
+  const browseAgentDiffs = async (ctx: any) => {
       if (!ctx.hasUI) return;
       
       if (!metadataStore) {
@@ -708,33 +735,13 @@ export default function orchestrator(pi: ExtensionAPI) {
         const agentMeta = metadataStore!.get(selectedId);
         if (!agentMeta) continue;
         
-        // Load diff from git
+        // Load diffs from stored metadata snapshot
         const state = new DiffState();
-        const execSync = require("node:child_process").execSync;
         
-        const gitOpts = { cwd: agentMeta.repoPath, encoding: "utf-8" as const, stdio: ["pipe", "pipe", "pipe"] as const };
-        
-        let changedFiles: string[];
-        try {
-          const output = execSync(
-            `git diff main..${agentMeta.branchName} --name-only`,
-            gitOpts,
-          ) as string;
-          changedFiles = output.trim().split("\n").filter((f: string) => f.length > 0);
-        } catch {
-          changedFiles = [];
-        }
-        
-        for (const filePath of changedFiles) {
-          let original = "";
-          let current = "";
-          try {
-            original = execSync(`git show main:${filePath}`, gitOpts) as string;
-          } catch { /* new file */ }
-          try {
-            current = execSync(`git show ${agentMeta.branchName}:${filePath}`, gitOpts) as string;
-          } catch { /* deleted file */ }
-          state.trackFile(filePath, original, current);
+        if (agentMeta.diffs) {
+          for (const diff of agentMeta.diffs) {
+            state.trackFile(diff.path, diff.original, diff.current);
+          }
         }
         
         if (state.pendingCount === 0) {
@@ -743,7 +750,8 @@ export default function orchestrator(pi: ExtensionAPI) {
         }
         
         // Phase 2: Show diff overlay. When user closes it, loop back to picker.
-        await ctx.ui.custom<void>(
+        // Returns "yanked" if user yanked code, so we can break out of the loop.
+        const diffResult = await ctx.ui.custom<string | void>(
           (tui, theme, _keybindings, done) => {
             const keyUtils = { matchesKey, Key, truncateToWidth };
             const highlightProvider = (code: string, fp: string): string => {
@@ -757,7 +765,12 @@ export default function orchestrator(pi: ExtensionAPI) {
             const handler = createOverlayHandler(
               modal, tui, theme, keyUtils, highlightProvider,
               () => done(),
-              undefined,
+              {
+                onPasteToEditor: (text: string) => {
+                  ctx.ui.pasteToEditor(text);
+                  done("yanked");
+                },
+              },
               { title: `Agent: ${agentMeta.description}` }
             );
             return {
@@ -768,6 +781,9 @@ export default function orchestrator(pi: ExtensionAPI) {
           },
           overlayOpts,
         );
+        
+        // Yank should close everything, not just the diff viewer
+        if (diffResult === "yanked") break;
         // Diff closed — if all files were dismissed, auto-remove agent from picker
         if (state.pendingCount === 0) {
           metadataStore!.remove(selectedId);
@@ -778,7 +794,16 @@ export default function orchestrator(pi: ExtensionAPI) {
           if (completed.length === 0) break;
         }
       }
-    },
+  };
+
+  pi.registerShortcut("alt+a", {
+    description: "Browse agent diffs",
+    handler: browseAgentDiffs,
+  });
+
+  pi.registerCommand("diff-subagent", {
+    description: "Browse and review subagent diffs",
+    handler: async (_args, ctx) => browseAgentDiffs(ctx),
   });
 
   // ============================================================================
@@ -863,6 +888,8 @@ export default function orchestrator(pi: ExtensionAPI) {
           if (metadataStore) {
             const wt = worktreeMap.get(info.taskId);
             if (wt) {
+              // Snapshot diffs while worktree/branch still exists
+              const diffs = await snapshotDiffs(wt);
               metadataStore.add({
                 taskId: info.taskId,
                 description: info.description,
@@ -871,6 +898,7 @@ export default function orchestrator(pi: ExtensionAPI) {
                 repoPath: wt.repoPath,
                 status: "completed",
                 completedAt: Date.now(),
+                diffs,
               });
             }
           }
