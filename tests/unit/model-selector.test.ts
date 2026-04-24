@@ -70,32 +70,52 @@ describe("selectModel", () => {
     });
   });
 
-  it("uses available openai-codex models when strategy forces ChatGPT", async () => {
+  it("uses gpt-5.3-codex for code-heavy ChatGPT work when strategy forces ChatGPT", async () => {
     const result = await (selectModel as any)("standard", {
       strategy: "openai-codex",
       modelRegistry: {
         getAvailable: () => [
-          createModel("openai-codex", "gpt-5.2-codex"),
+          createModel("openai-codex", "gpt-5.4"),
+          createModel("openai-codex", "gpt-5.3-codex"),
           createModel("anthropic", "claude-sonnet-4-5"),
         ],
       },
     });
 
     expect(result.provider).toBe("openai-codex");
-    expect(result.modelId).toBe("gpt-5.2-codex");
+    expect(result.modelId).toBe("gpt-5.3-codex");
     expect(result.thinkingLevel).toBe("low");
+  });
+
+  it("uses gpt-5.4 for deep reasoning ChatGPT work", async () => {
+    const result = await (selectModel as any)("deep", {
+      strategy: "openai-codex",
+      modelRegistry: {
+        getAvailable: () => [
+          createModel("openai-codex", "gpt-5.3-codex"),
+          createModel("openai-codex", "gpt-5.4"),
+        ],
+      },
+    });
+
+    expect(result.provider).toBe("openai-codex");
+    expect(result.modelId).toBe("gpt-5.4");
+    expect(result.thinkingLevel).toBe("medium");
   });
 
   it("uses available ChatGPT models in auto mode when Claude is unavailable", async () => {
     const result = await (selectModel as any)("light", {
       strategy: "auto",
       modelRegistry: {
-        getAvailable: () => [createModel("openai-codex", "gpt-5.2-codex")],
+        getAvailable: () => [
+          createModel("openai-codex", "gpt-5.4"),
+          createModel("openai-codex", "gpt-5.3-codex"),
+        ],
       },
     });
 
     expect(result.provider).toBe("openai-codex");
-    expect(result.modelId).toBe("gpt-5.2-codex");
+    expect(result.modelId).toBe("gpt-5.3-codex");
     expect(result.thinkingLevel).toBe("minimal");
   });
 
@@ -214,6 +234,12 @@ describe("Type compilation checks", () => {
     
     expect(taskResult.success).toBe(false);
     expect(taskResult.error).toBe("Timeout exceeded");
+  });
+
+  it("returns codex-first defaults for code tiers and gpt-5.4 for deep reasoning", () => {
+    expect(selectModel("trivial-code", { strategy: "openai-codex" }).modelId).toBe("gpt-5.3-codex");
+    expect(selectModel("standard", { strategy: "openai-codex" }).modelId).toBe("gpt-5.3-codex");
+    expect(selectModel("deep", { strategy: "openai-codex" }).modelId).toBe("gpt-5.4");
   });
 
   it("ModelSelection type works correctly", () => {

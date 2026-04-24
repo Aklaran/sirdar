@@ -92,7 +92,7 @@ describe("ApprovalManager", () => {
 
       expect(mockUI.confirm).toHaveBeenCalledWith(
         "🤖 Spawn Subagent?",
-        expect.stringContaining("gpt-5.2-codex")
+        expect.stringContaining("gpt-5.3-codex")
       );
     });
   });

@@ -67,6 +67,7 @@ Create and spawn a new sub-agent with specific capabilities and budget.
 - `auto` (default) chooses from the user's authenticated models via Pi's `modelRegistry`
 - When both are available, `auto` prefers `anthropic` for backward compatibility, then falls back to `openai-codex`
 - Use `modelStrategy: "openai-codex"` to force ChatGPT/Codex models
+- For `openai-codex`, Sirdar prefers `gpt-5.3-codex` for code-centric tiers and `gpt-5.4` for deep reasoning, with `gpt-5.4-mini` for small/simple tasks
 - Set `SIRDAR_MODEL_STRATEGY=openai-codex` (or `ORCHESTRATOR_MODEL_STRATEGY=openai-codex`) to change the default globally
 
 **Example:**
