@@ -4,7 +4,7 @@ Multi-agent orchestration for [Pi](https://github.com/badlogic/pi-mono) with bud
 
 ## Features
 
-- 🤖 **Spawn Sub-agents** - Create focused sub-agents for specific tasks with automatic model selection
+- 🤖 **Spawn Sub-agents** - Create focused sub-agents for specific tasks with auth-aware model selection
 - 📊 **Budget Tracking** - Monitor token usage and costs per task tier with threshold warnings
 - 📝 **Memory Logging** - Log task completions, reflections, patterns, and ideas
 - 🌳 **Git Worktree Isolation** - Automatic worktree creation with rebase-based integration
@@ -52,15 +52,22 @@ Create and spawn a new sub-agent with specific capabilities and budget.
 **Parameters:**
 - `description` (required) - Human-readable task description
 - `prompt` (required) - Full prompt to send to the subagent
-- `tier` (required) - Task complexity tier (determines model and budget):
-  - `trivial-simple` - Simple tasks, Haiku 3, thinking off ($0.05 soft / $0.15 hard)
-  - `trivial-code` - Simple code tasks, Haiku 3.5, thinking off ($0.10 soft / $0.25 hard)
-  - `light` - Light tasks, Sonnet 4.5, thinking minimal ($0.50 soft / $1.00 hard)
-  - `standard` - Standard tasks, Sonnet 4.5, thinking low ($2.00 soft / $5.00 hard)
-  - `complex` - Complex tasks, Sonnet 4.5, thinking high ($10.00 soft / $20.00 hard)
-  - `deep` - Deep reasoning, Opus 4.5, thinking medium ($25.00 soft / $50.00 hard)
+- `tier` (required) - Task complexity tier (determines model family, thinking level, and budget):
+  - `trivial-simple` - Cheapest fast helper, thinking off ($0.05 soft / $0.15 hard)
+  - `trivial-code` - Cheap coding helper, thinking off ($0.10 soft / $0.25 hard)
+  - `light` - Light implementation/research, thinking minimal ($0.50 soft / $1.00 hard)
+  - `standard` - Normal coding work, thinking low ($2.00 soft / $5.00 hard)
+  - `complex` - Hard implementation/refactor work, thinking high ($10.00 soft / $20.00 hard)
+  - `deep` - Deep reasoning / strongest available model, thinking medium ($25.00 soft / $50.00 hard)
 - `cwd` (optional) - Working directory (defaults to current directory)
 - `useWorktree` (optional) - Create git worktree for isolation (default: true)
+- `modelStrategy` (optional) - `auto`, `anthropic`, or `openai-codex`
+
+**Model selection:**
+- `auto` (default) chooses from the user's authenticated models via Pi's `modelRegistry`
+- When both are available, `auto` prefers `anthropic` for backward compatibility, then falls back to `openai-codex`
+- Use `modelStrategy: "openai-codex"` to force ChatGPT/Codex models
+- Set `SIRDAR_MODEL_STRATEGY=openai-codex` (or `ORCHESTRATOR_MODEL_STRATEGY=openai-codex`) to change the default globally
 
 **Example:**
 ```
@@ -179,8 +186,8 @@ session_start Event
 2. Task submitted to AgentPool
 3. If pool has capacity → Start immediately
 4. If pool full → Queue task
-5. LifecycleManager creates agent session
-6. Agent executes with model and thinking level
+5. LifecycleManager selects an authenticated model (or uses the forced strategy) and creates the agent session
+6. Agent executes with that model and thinking level
 7. Result logged to memory
 8. Budget tracked and saved
 9. User notified of completion
@@ -219,7 +226,7 @@ pnpm install
 ### Testing
 
 ```bash
-# Run all tests (174 tests across 11 test files)
+# Run all tests
 pnpm test
 
 # Run specific test file
@@ -268,6 +275,18 @@ agentPool = new AgentPool(
   { /* callbacks */ }
 );
 ```
+
+### Default Model Strategy
+
+Set one of these environment variables before launching Pi to change the default strategy for tasks that don't specify `modelStrategy`:
+
+```bash
+export SIRDAR_MODEL_STRATEGY=openai-codex
+# or
+export ORCHESTRATOR_MODEL_STRATEGY=anthropic
+```
+
+Per-task `modelStrategy` passed to `spawn_agent` always wins.
 
 ### Budget Thresholds
 

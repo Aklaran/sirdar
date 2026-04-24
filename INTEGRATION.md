@@ -29,14 +29,15 @@ The extension registers 6 tools:
 - `tier` (enum) - Task complexity: `trivial-simple`, `trivial-code`, `light`, `standard`, `complex`, `deep`
 - `cwd` (optional string) - Working directory
 - `useWorktree` (optional boolean) - Whether to use git worktree isolation (default: true)
+- `modelStrategy` (optional enum) - `auto`, `anthropic`, or `openai-codex`
 
 **Execution Flow:**
 1. Generate unique task ID (`task-{timestamp}-{random}`)
 2. Build `TaskDefinition` from parameters
-3. Get model selection via `selectModel(tier)`
+3. Get model selection via `selectModel(tier, { strategy, modelRegistry })`
 4. If in git repo and `useWorktree=true`, create worktree for isolation (using rebase-based integration)
 5. Submit task to `AgentPool`
-6. Return confirmation with task ID, status, model, and thinking level
+6. Return confirmation with task ID, status, selected provider/model, and thinking level
 
 #### 2. check_agents
 **Parameters:**
@@ -126,7 +127,7 @@ Generate task ID
   ↓
 Build TaskDefinition
   ↓
-Select model (based on tier)
+Select model (based on tier + strategy + authenticated models)
   ↓
 Create worktree (if git repo + useWorktree=true, using rebase-based integration)
   ↓
@@ -145,9 +146,9 @@ Return confirmation to user
 ```
 LifecycleManager.runTask(task)
   ↓
-Select model via selectModel(tier)
+Select model via selectModel(tier, { strategy, modelRegistry })
   ↓
-Create agent session with model and thinking level
+Create agent session with the selected provider/model and thinking level
   ↓
 Subscribe to session events (capture output)
   ↓
@@ -237,7 +238,7 @@ BudgetTracker.save() - Append to history file
 ## Testing
 
 ### Unit Tests (162 tests)
-- `model-selector.test.ts` - Model selection logic
+- `model-selector.test.ts` - Model selection logic, provider strategy, and auth-aware fallback
 - `budget-tracker.test.ts` - Budget tracking and thresholds
 - `approval.test.ts` - Approval UI formatting
 - `task-queue.test.ts` - Queue operations
