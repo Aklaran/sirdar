@@ -174,6 +174,10 @@ export default function orchestrator(pi: ExtensionAPI) {
         description: "Whether to use git worktree isolation. Default true for code tasks." 
       })),
       timeoutMs: Type.Optional(Type.Number({ description: "Timeout in seconds (optional, no default timeout)" })),
+      modelStrategy: Type.Optional(StringEnum(
+        ["auto", "anthropic", "openai-codex"] as const,
+        { description: "Model selection strategy. auto chooses from authenticated models; use openai-codex for ChatGPT or anthropic for Claude." }
+      )),
     }),
     async execute(toolCallId, params, signal, onUpdate, ctx) {
       // Generate task ID
@@ -187,10 +191,26 @@ export default function orchestrator(pi: ExtensionAPI) {
         description: params.description,
         cwd: params.cwd,
         timeoutMs: params.timeoutMs ? params.timeoutMs * 1000 : undefined,
+        modelStrategy: params.modelStrategy,
       };
       
       // Get model selection
-      const modelSelection = selectModel(params.tier as TaskTier);
+      let modelSelection;
+      try {
+        modelSelection = selectModel(params.tier as TaskTier, {
+          strategy: params.modelStrategy,
+          modelRegistry: ctx.modelRegistry as any,
+        });
+      } catch (error) {
+        return {
+          content: [{
+            type: "text",
+            text: error instanceof Error ? error.message : String(error),
+          }],
+          details: undefined,
+          isError: true,
+        };
+      }
       
       onUpdate?.({ content: [{ type: "text", text: `✅ Spawning ${params.tier} task — model: ${modelSelection.modelId}, thinking: ${modelSelection.thinkingLevel}` }], details: undefined });
       
@@ -871,11 +891,10 @@ export default function orchestrator(pi: ExtensionAPI) {
 
         onComplete: async (info) => {
           if (info.result) {
-            const modelSelection = selectModel(info.tier);
             await memoryLogger.logTaskCompletion(
               info.result,
               info.tier,
-              modelSelection.modelId
+              info.result.modelId || "unknown-model"
             );
           }
           
@@ -932,11 +951,10 @@ export default function orchestrator(pi: ExtensionAPI) {
         
         onFailed: async (info) => {
           if (info.result) {
-            const modelSelection = selectModel(info.tier);
             await memoryLogger.logTaskCompletion(
               info.result,
               info.tier,
-              modelSelection.modelId
+              info.result.modelId || "unknown-model"
             );
           }
           

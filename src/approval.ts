@@ -24,7 +24,7 @@ export class ApprovalManager {
    */
   async requestApproval(task: TaskDefinition): Promise<boolean> {
     // 1. Get model selection based on tier
-    const selection = selectModel(task.tier);
+    const selection = selectModel(task.tier, { strategy: task.modelStrategy });
 
     // 2. Format approval message
     const message = this.formatApprovalMessage(task, selection);

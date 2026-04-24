@@ -241,7 +241,7 @@ export function selectModel(tier: TaskTier, options?: SelectModelOptions): Model
   const strategy = options?.strategy ?? getDefaultModelStrategy();
   const thinkingLevel = getThinkingLevel(tier);
 
-  if (options?.modelRegistry) {
+  if (options?.modelRegistry && typeof options.modelRegistry.getAvailable === "function") {
     const availableModels = options.modelRegistry.getAvailable();
 
     for (const provider of getPreferredProviders(strategy)) {

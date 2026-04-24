@@ -59,14 +59,19 @@ export class LifecycleManager {
     let outputText = "";
     let session: any = null;
     let timeoutId: NodeJS.Timeout | null = null;
-    let timedOut = false;
+    let modelSelection: ReturnType<typeof selectModel> | undefined;
 
     try {
-      // 1. Select model based on tier
-      const modelSelection = selectModel(task.tier);
+      // 1. Select model based on tier + strategy
+      modelSelection = selectModel(task.tier, {
+        strategy: task.modelStrategy,
+        modelRegistry: this.modelRegistry as any,
+      });
 
       // 2. Get the Model object
-      const model = getModel(modelSelection.provider as any, modelSelection.modelId);
+      const model =
+        this.modelRegistry?.find?.(modelSelection.provider, modelSelection.modelId) ??
+        getModel(modelSelection.provider as any, modelSelection.modelId as any);
       if (!model) {
         throw new Error(
           `Model not found: ${modelSelection.provider}/${modelSelection.modelId}`
@@ -109,7 +114,6 @@ export class LifecycleManager {
       const timeoutMs = task.timeoutMs ?? DEFAULT_TIMEOUT_MS;
       const timeoutPromise = new Promise<void>((_, reject) => {
         timeoutId = setTimeout(() => {
-          timedOut = true;
           session?.abort();
           reject(new Error(`Task timeout after ${timeoutMs}ms`));
         }, timeoutMs);
@@ -142,6 +146,9 @@ export class LifecycleManager {
         tokenUsage: { input: 0, output: 0 },
         costEstimate: 0,
         durationMs,
+        modelProvider: modelSelection.provider,
+        modelId: modelSelection.modelId,
+        thinkingLevel: modelSelection.thinkingLevel,
       };
     } catch (error) {
       // Clear timeout on error
@@ -167,6 +174,9 @@ export class LifecycleManager {
         costEstimate: 0,
         durationMs,
         error: errorMessage,
+        modelProvider: modelSelection?.provider,
+        modelId: modelSelection?.modelId,
+        thinkingLevel: modelSelection?.thinkingLevel,
       };
     } finally {
       // 10. Always dispose of the session

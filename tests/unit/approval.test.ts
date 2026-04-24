@@ -81,6 +81,20 @@ describe("ApprovalManager", () => {
         "info"
       );
     });
+
+    it("uses the task modelStrategy when previewing the subagent model", async () => {
+      mockUI.confirm.mockResolvedValue(true);
+
+      await approvalManager.requestApproval({
+        ...testTask,
+        modelStrategy: "openai-codex",
+      });
+
+      expect(mockUI.confirm).toHaveBeenCalledWith(
+        "🤖 Spawn Subagent?",
+        expect.stringContaining("gpt-5.2-codex")
+      );
+    });
   });
 
   describe("formatApprovalMessage", () => {

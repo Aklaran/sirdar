@@ -3,6 +3,19 @@ import { LifecycleManager } from "../../src/lifecycle-manager";
 import { createMockSession, createMockSessionFactory } from "../mocks/mock-session";
 import type { TaskDefinition } from "../../src/types";
 
+const createModel = (provider: string, id: string, reasoning = true) => ({
+  provider,
+  id,
+  name: id,
+  api: provider === "anthropic" ? "anthropic-messages" : "openai-responses",
+  baseUrl: "https://example.com",
+  reasoning,
+  input: ["text"],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 200_000,
+  maxTokens: 16_000,
+});
+
 describe("LifecycleManager", () => {
   let mockAuthStorage: any;
   let mockModelRegistry: any;
@@ -109,6 +122,40 @@ describe("LifecycleManager", () => {
       // For "complex" tier, should use claude-sonnet-4-5 with high thinking
       expect(callArgs.model).toBeDefined();
       expect(callArgs.thinkingLevel).toBe("high");
+    });
+
+    it("uses the requested ChatGPT/Codex strategy when selecting a model", async () => {
+      const mockSession = createMockSession();
+      const mockCreateSession = createMockSessionFactory(mockSession);
+      const codexModel = createModel("openai-codex", "gpt-5.2-codex");
+
+      const manager = new LifecycleManager({
+        createSession: mockCreateSession,
+        authStorage: mockAuthStorage,
+        modelRegistry: {
+          getAvailable: () => [codexModel],
+          find: (provider: string, modelId: string) =>
+            provider === codexModel.provider && modelId === codexModel.id ? codexModel : undefined,
+        } as any,
+      });
+
+      const task: TaskDefinition = {
+        id: "test-task",
+        prompt: "Do something",
+        tier: "standard",
+        description: "Standard task",
+        modelStrategy: "openai-codex",
+      };
+
+      const result = await manager.runTask(task);
+
+      expect(mockCreateSession).toHaveBeenCalled();
+      const firstCall = mockCreateSession.mock.calls[0] as any[];
+      const callArgs = firstCall[0];
+      expect(callArgs.model).toBe(codexModel);
+      expect(result.modelProvider).toBe("openai-codex");
+      expect(result.modelId).toBe("gpt-5.2-codex");
+      expect(result.thinkingLevel).toBe("low");
     });
 
     it("calls createAgentSession with inMemory session manager", async () => {
