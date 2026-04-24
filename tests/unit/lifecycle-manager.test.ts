@@ -451,6 +451,7 @@ describe("LifecycleManager", () => {
       const callArgs = firstCall[0];
       expect(callArgs).toBeDefined();
       expect(callArgs.cwd).toBe("/custom/working/dir");
+      expect(callArgs.sessionManager.getCwd()).toBe("/custom/working/dir");
     });
 
     it("defaults cwd to process.cwd() when not provided", async () => {
@@ -478,6 +479,7 @@ describe("LifecycleManager", () => {
       const callArgs = firstCall[0];
       expect(callArgs).toBeDefined();
       expect(callArgs.cwd).toBe(process.cwd());
+      expect(callArgs.sessionManager.getCwd()).toBe(process.cwd());
     });
 
     it("truncates output longer than 5000 chars", async () => {

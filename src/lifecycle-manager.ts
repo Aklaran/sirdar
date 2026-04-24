@@ -7,6 +7,8 @@ import {
   createAgentSession,
   SessionManager,
   DefaultResourceLoader,
+  SettingsManager,
+  getAgentDir,
   type AuthStorage,
   type ModelRegistry,
   type AgentSessionEvent,
@@ -80,7 +82,12 @@ export class LifecycleManager {
 
       // 3. Create ResourceLoader with custom system prompt
       const effectiveCwd = task.cwd || process.cwd();
+      const agentDir = getAgentDir();
+      const settingsManager = SettingsManager.create(effectiveCwd, agentDir);
       const loader = new DefaultResourceLoader({
+        cwd: effectiveCwd,
+        agentDir,
+        settingsManager,
         systemPromptOverride: () => buildSystemPrompt(effectiveCwd),
       });
       await loader.reload();
@@ -89,10 +96,11 @@ export class LifecycleManager {
       const { session: agentSession } = await this.createSession({
         model,
         thinkingLevel: modelSelection.thinkingLevel,
-        sessionManager: SessionManager.inMemory(),
-        cwd: task.cwd || process.cwd(),
+        sessionManager: SessionManager.inMemory(effectiveCwd),
+        cwd: effectiveCwd,
         authStorage: this.authStorage,
         modelRegistry: this.modelRegistry,
+        settingsManager,
         resourceLoader: loader,
       });
 
