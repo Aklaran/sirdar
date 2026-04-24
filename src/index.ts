@@ -698,8 +698,8 @@ export default function orchestrator(pi: ExtensionAPI) {
         }));
         
         // Phase 1: Show picker, get selection or cancel
-        const selectedId = await ctx.ui.custom<string | null>(
-          (tui, theme, _keybindings, done) => {
+        const selectedId = await ctx.ui.custom(
+          (tui: any, theme: any, _keybindings: any, done: (value: string | null) => void) => {
             const keyUtils = { matchesKey, Key, truncateToWidth };
             const handler = createPickerHandler(
               items, tui, theme, keyUtils,
@@ -751,8 +751,8 @@ export default function orchestrator(pi: ExtensionAPI) {
         
         // Phase 2: Show diff overlay. When user closes it, loop back to picker.
         // Returns "yanked" if user yanked code, so we can break out of the loop.
-        const diffResult = await ctx.ui.custom<string | void>(
-          (tui, theme, _keybindings, done) => {
+        const diffResult = await ctx.ui.custom(
+          (tui: any, theme: any, _keybindings: any, done: (value?: string) => void) => {
             const keyUtils = { matchesKey, Key, truncateToWidth };
             const highlightProvider = (code: string, fp: string): string => {
               const lang = getLanguageFromPath(fp);

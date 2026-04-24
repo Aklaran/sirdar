@@ -5,6 +5,8 @@
 // Task tiers matching the Model Guide
 export type TaskTier = "trivial-simple" | "trivial-code" | "light" | "standard" | "complex" | "deep";
 
+export type ModelStrategy = "auto" | "anthropic" | "openai-codex";
+
 // Thinking levels from Pi SDK
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
@@ -22,6 +24,7 @@ export interface TaskDefinition {
   cwd?: string;                  // working directory (defaults to process.cwd())
   contextFiles?: string[];       // files the subagent should read first
   timeoutMs?: number;            // default 600000 (10 min)
+  modelStrategy?: ModelStrategy; // auto | anthropic | openai-codex
 }
 
 export interface ExpectedDuration {
@@ -44,4 +47,7 @@ export interface TaskResult {
   costEstimate: number;          // dollars
   durationMs: number;
   error?: string;                // if success is false
+  modelProvider?: string;
+  modelId?: string;
+  thinkingLevel?: ThinkingLevel;
 }

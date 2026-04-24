@@ -1,73 +1,269 @@
 /**
  * Model selection logic based on task tier
- * 
- * Maps task tiers to appropriate models and thinking levels per the Model Guide.
- * Pure functions with no side effects or SDK dependencies.
+ *
+ * Maps task tiers to appropriate models and thinking levels.
+ * Can either use legacy built-in defaults or dynamically select from
+ * authenticated models available in Pi's ModelRegistry.
  */
 
-import type { TaskTier, ModelSelection, BudgetThresholds, ExpectedDuration } from "./types";
+import type {
+  TaskTier,
+  ModelSelection,
+  BudgetThresholds,
+  ExpectedDuration,
+  ModelStrategy,
+  ThinkingLevel,
+} from "./types";
 
-/**
- * Select the appropriate model and thinking level for a given task tier.
- * 
- * Mapping per Model Guide:
- * - trivial  → claude-haiku-3-5, thinking off
- * - light    → claude-sonnet-4-5, thinking off
- * - standard → claude-sonnet-4-5, thinking low
- * - complex  → claude-sonnet-4-5, thinking high
- * - deep     → claude-opus-4-5, thinking medium
- * 
- * @param tier - The task tier
- * @returns ModelSelection with provider, modelId, and thinkingLevel
- * @throws Error if tier is invalid
- */
-export function selectModel(tier: TaskTier): ModelSelection {
+interface AvailableModelLike {
+  provider: string;
+  id: string;
+  reasoning?: boolean;
+}
+
+interface ModelRegistryLike {
+  getAvailable(): AvailableModelLike[];
+}
+
+interface SelectModelOptions {
+  strategy?: ModelStrategy;
+  modelRegistry?: ModelRegistryLike;
+}
+
+const DEFAULT_AUTO_PROVIDER_ORDER = ["anthropic", "openai-codex"] as const;
+const SUPPORTED_STRATEGIES: ModelStrategy[] = ["auto", "anthropic", "openai-codex"];
+
+const MODEL_PREFERENCES: Record<Exclude<ModelStrategy, "auto">, Record<TaskTier, string[]>> = {
+  anthropic: {
+    "trivial-simple": [
+      "claude-3-haiku-20240307",
+      "claude-3-5-haiku-latest",
+      "claude-3-5-haiku-20241022",
+      "claude-haiku-4-5",
+      "claude-haiku-4-5-20251001",
+    ],
+    "trivial-code": [
+      "claude-haiku-4-5",
+      "claude-haiku-4-5-20251001",
+      "claude-3-5-haiku-latest",
+      "claude-3-5-haiku-20241022",
+      "claude-3-haiku-20240307",
+    ],
+    light: [
+      "claude-sonnet-4-5",
+      "claude-sonnet-4-5-20250929",
+      "claude-sonnet-4-20250514",
+      "claude-sonnet-4-0",
+      "claude-3-7-sonnet-20250219",
+      "claude-3-5-sonnet-20241022",
+      "claude-3-5-sonnet-20240620",
+      "claude-3-sonnet-20240229",
+    ],
+    standard: [
+      "claude-sonnet-4-5",
+      "claude-sonnet-4-5-20250929",
+      "claude-sonnet-4-20250514",
+      "claude-sonnet-4-0",
+      "claude-3-7-sonnet-20250219",
+      "claude-3-5-sonnet-20241022",
+      "claude-3-5-sonnet-20240620",
+      "claude-3-sonnet-20240229",
+    ],
+    complex: [
+      "claude-sonnet-4-5",
+      "claude-sonnet-4-5-20250929",
+      "claude-sonnet-4-6",
+      "claude-sonnet-4-20250514",
+      "claude-sonnet-4-0",
+      "claude-3-7-sonnet-20250219",
+      "claude-3-5-sonnet-20241022",
+      "claude-3-5-sonnet-20240620",
+      "claude-3-sonnet-20240229",
+    ],
+    deep: [
+      "claude-opus-4-5",
+      "claude-opus-4-5-20251101",
+      "claude-opus-4-7",
+      "claude-opus-4-6",
+      "claude-opus-4-1",
+      "claude-opus-4-1-20250805",
+      "claude-opus-4-20250514",
+      "claude-opus-4-0",
+      "claude-3-opus-20240229",
+    ],
+  },
+  "openai-codex": {
+    "trivial-simple": [
+      "gpt-5.1-codex-mini",
+      "gpt-5.4-mini",
+      "gpt-5.3-codex-spark",
+      "gpt-5.1",
+      "gpt-5.2",
+      "gpt-5.4",
+      "gpt-5.5",
+    ],
+    "trivial-code": [
+      "gpt-5.1-codex-mini",
+      "gpt-5.3-codex-spark",
+      "gpt-5.2-codex",
+      "gpt-5.3-codex",
+      "gpt-5.1-codex-max",
+      "gpt-5.4-mini",
+      "gpt-5.4",
+      "gpt-5.5",
+    ],
+    light: [
+      "gpt-5.2-codex",
+      "gpt-5.3-codex",
+      "gpt-5.4",
+      "gpt-5.5",
+      "gpt-5.2",
+      "gpt-5.1",
+    ],
+    standard: [
+      "gpt-5.2-codex",
+      "gpt-5.3-codex",
+      "gpt-5.4",
+      "gpt-5.5",
+      "gpt-5.2",
+      "gpt-5.1",
+    ],
+    complex: [
+      "gpt-5.3-codex",
+      "gpt-5.1-codex-max",
+      "gpt-5.5",
+      "gpt-5.4",
+      "gpt-5.2-codex",
+      "gpt-5.2",
+      "gpt-5.1",
+    ],
+    deep: [
+      "gpt-5.5",
+      "gpt-5.4",
+      "gpt-5.3-codex",
+      "gpt-5.1-codex-max",
+      "gpt-5.2",
+      "gpt-5.2-codex",
+      "gpt-5.1",
+    ],
+  },
+};
+
+function getThinkingLevel(tier: TaskTier): ThinkingLevel {
   switch (tier) {
     case "trivial-simple":
-      return {
-        provider: "anthropic",
-        modelId: "claude-3-haiku-20240307",
-        thinkingLevel: "off",
-      };
-    
     case "trivial-code":
-      return {
-        provider: "anthropic",
-        modelId: "claude-haiku-4-5",
-        thinkingLevel: "off",
-      };
-    
+      return "off";
     case "light":
-      return {
-        provider: "anthropic",
-        modelId: "claude-sonnet-4-5",
-        thinkingLevel: "minimal",
-      };
-    
+      return "minimal";
     case "standard":
-      return {
-        provider: "anthropic",
-        modelId: "claude-sonnet-4-5",
-        thinkingLevel: "low",
-      };
-    
+      return "low";
     case "complex":
-      return {
-        provider: "anthropic",
-        modelId: "claude-sonnet-4-5",
-        thinkingLevel: "high",
-      };
-    
+      return "high";
     case "deep":
-      return {
-        provider: "anthropic",
-        modelId: "claude-opus-4-5",
-        thinkingLevel: "medium",
-      };
-    
+      return "medium";
     default:
       throw new Error(`Invalid task tier: ${tier}`);
   }
+}
+
+function getPreferredProviders(strategy: ModelStrategy): readonly Exclude<ModelStrategy, "auto">[] {
+  if (strategy === "auto") {
+    return DEFAULT_AUTO_PROVIDER_ORDER;
+  }
+  return [strategy];
+}
+
+function getFallbackModelId(provider: Exclude<ModelStrategy, "auto">, tier: TaskTier): string {
+  return MODEL_PREFERENCES[provider][tier][0];
+}
+
+function chooseFallbackAvailableModel(
+  provider: Exclude<ModelStrategy, "auto">,
+  tier: TaskTier,
+  candidates: AvailableModelLike[]
+): AvailableModelLike | undefined {
+  if (candidates.length === 0) return undefined;
+
+  if (tier === "trivial-simple" || tier === "trivial-code") {
+    return (
+      candidates.find((candidate) => /mini|spark|haiku/i.test(candidate.id)) ??
+      candidates[0]
+    );
+  }
+
+  if (tier === "deep") {
+    return candidates.find((candidate) => candidate.reasoning) ?? candidates[0];
+  }
+
+  if (provider === "openai-codex") {
+    return (
+      candidates.find((candidate) => /codex/i.test(candidate.id)) ??
+      candidates.find((candidate) => candidate.reasoning) ??
+      candidates[0]
+    );
+  }
+
+  return candidates.find((candidate) => candidate.reasoning) ?? candidates[0];
+}
+
+function selectAvailableModel(
+  provider: Exclude<ModelStrategy, "auto">,
+  tier: TaskTier,
+  availableModels: AvailableModelLike[]
+): AvailableModelLike | undefined {
+  const providerModels = availableModels.filter((model) => model.provider === provider);
+  if (providerModels.length === 0) return undefined;
+
+  for (const modelId of MODEL_PREFERENCES[provider][tier]) {
+    const exactMatch = providerModels.find((model) => model.id === modelId);
+    if (exactMatch) return exactMatch;
+  }
+
+  return chooseFallbackAvailableModel(provider, tier, providerModels);
+}
+
+export function getDefaultModelStrategy(): ModelStrategy {
+  const raw = process.env.SIRDAR_MODEL_STRATEGY ?? process.env.ORCHESTRATOR_MODEL_STRATEGY;
+  if (raw && SUPPORTED_STRATEGIES.includes(raw as ModelStrategy)) {
+    return raw as ModelStrategy;
+  }
+  return "auto";
+}
+
+/**
+ * Select the appropriate model and thinking level for a given task tier.
+ *
+ * Without a model registry, this returns deterministic provider defaults.
+ * With a registry, it selects from the user's authenticated models.
+ */
+export function selectModel(tier: TaskTier, options?: SelectModelOptions): ModelSelection {
+  const strategy = options?.strategy ?? getDefaultModelStrategy();
+  const thinkingLevel = getThinkingLevel(tier);
+
+  if (options?.modelRegistry) {
+    const availableModels = options.modelRegistry.getAvailable();
+
+    for (const provider of getPreferredProviders(strategy)) {
+      const match = selectAvailableModel(provider, tier, availableModels);
+      if (match) {
+        return {
+          provider: match.provider,
+          modelId: match.id,
+          thinkingLevel,
+        };
+      }
+    }
+
+    throw new Error(`No authenticated models available for strategy: ${strategy}`);
+  }
+
+  const fallbackProvider = strategy === "auto" ? "anthropic" : strategy;
+  return {
+    provider: fallbackProvider,
+    modelId: getFallbackModelId(fallbackProvider, tier),
+    thinkingLevel,
+  };
 }
 
 /**
@@ -94,17 +290,6 @@ export function getExpectedDuration(tier: TaskTier): ExpectedDuration {
 
 /**
  * Get budget thresholds for a given task tier.
- * 
- * Thresholds per Model Guide:
- * - trivial:  soft $0.10, hard $0.25
- * - light:    soft $0.50, hard $1.00
- * - standard: soft $2.00, hard $5.00
- * - complex:  soft $10.00, hard $20.00
- * - deep:     soft $25.00, hard $50.00
- * 
- * @param tier - The task tier
- * @returns BudgetThresholds with softWarning and hardFlag in dollars
- * @throws Error if tier is invalid
  */
 export function getBudgetThresholds(tier: TaskTier): BudgetThresholds {
   switch (tier) {
@@ -113,37 +298,37 @@ export function getBudgetThresholds(tier: TaskTier): BudgetThresholds {
         softWarning: 0.05,
         hardFlag: 0.15,
       };
-    
+
     case "trivial-code":
       return {
         softWarning: 0.10,
         hardFlag: 0.25,
       };
-    
+
     case "light":
       return {
         softWarning: 0.50,
         hardFlag: 1.00,
       };
-    
+
     case "standard":
       return {
         softWarning: 2.00,
         hardFlag: 5.00,
       };
-    
+
     case "complex":
       return {
         softWarning: 10.00,
         hardFlag: 20.00,
       };
-    
+
     case "deep":
       return {
         softWarning: 25.00,
         hardFlag: 50.00,
       };
-    
+
     default:
       throw new Error(`Invalid task tier: ${tier}`);
   }

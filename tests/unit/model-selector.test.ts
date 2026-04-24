@@ -2,6 +2,19 @@ import { describe, it, expect } from "vitest";
 import { selectModel, getBudgetThresholds, getExpectedDuration } from "../../src/model-selector";
 import type { TaskTier, ModelSelection, BudgetThresholds, TaskDefinition, TaskResult } from "../../src/types";
 
+const createModel = (provider: string, id: string, reasoning = true) => ({
+  provider,
+  id,
+  name: id,
+  api: provider === "anthropic" ? "anthropic-messages" : "openai-responses",
+  baseUrl: "https://example.com",
+  reasoning,
+  input: ["text"],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 200_000,
+  maxTokens: 16_000,
+});
+
 describe("selectModel", () => {
   it("returns claude-haiku-3 with thinking off for trivial-simple tier", () => {
     const result = selectModel("trivial-simple");
@@ -49,12 +62,52 @@ describe("selectModel", () => {
     expect(() => selectModel("invalid" as TaskTier)).toThrow();
   });
 
-  it("always returns anthropic as provider for all tiers", () => {
+  it("always returns anthropic as provider for all tiers when no registry is provided", () => {
     const tiers: TaskTier[] = ["trivial-simple", "trivial-code", "light", "standard", "complex", "deep"];
     tiers.forEach((tier) => {
       const result = selectModel(tier);
       expect(result.provider).toBe("anthropic");
     });
+  });
+
+  it("uses available openai-codex models when strategy forces ChatGPT", async () => {
+    const result = await (selectModel as any)("standard", {
+      strategy: "openai-codex",
+      modelRegistry: {
+        getAvailable: () => [
+          createModel("openai-codex", "gpt-5.2-codex"),
+          createModel("anthropic", "claude-sonnet-4-5"),
+        ],
+      },
+    });
+
+    expect(result.provider).toBe("openai-codex");
+    expect(result.modelId).toBe("gpt-5.2-codex");
+    expect(result.thinkingLevel).toBe("low");
+  });
+
+  it("uses available ChatGPT models in auto mode when Claude is unavailable", async () => {
+    const result = await (selectModel as any)("light", {
+      strategy: "auto",
+      modelRegistry: {
+        getAvailable: () => [createModel("openai-codex", "gpt-5.2-codex")],
+      },
+    });
+
+    expect(result.provider).toBe("openai-codex");
+    expect(result.modelId).toBe("gpt-5.2-codex");
+    expect(result.thinkingLevel).toBe("minimal");
+  });
+
+  it("throws a clear error when the forced provider has no authenticated models", () => {
+    expect(() =>
+      (selectModel as any)("deep", {
+        strategy: "openai-codex",
+        modelRegistry: {
+          getAvailable: () => [createModel("anthropic", "claude-opus-4-5")],
+        },
+      })
+    ).toThrow("No authenticated models available for strategy: openai-codex");
   });
 });
 
