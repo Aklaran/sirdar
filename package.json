@@ -1,11 +1,17 @@
 {
-  "name": "orchestrator",
+  "name": "sirdar",
   "version": "1.0.0",
   "type": "module",
-  "description": "Multi-agent orchestration extension for Pi coding agent",
+  "description": "Multi-agent orchestration Pi package for the Pi coding agent",
+  "keywords": [
+    "pi-package"
+  ],
   "pi": {
     "extensions": [
       "./src/index.ts"
+    ],
+    "skills": [
+      "./skills"
     ]
   },
   "scripts": {
@@ -14,12 +20,17 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mariozechner/pi-ai": "latest",
-    "@mariozechner/pi-coding-agent": "latest",
     "@sinclair/typebox": "^0.34.48",
-    "pi-diff-ui": "file:../pi-diff-ui"
+    "pi-diff-ui": "file:./packages/pi-diff-ui"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-ai": "*",
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*"
   },
   "devDependencies": {
+    "@mariozechner/pi-ai": "latest",
+    "@mariozechner/pi-coding-agent": "latest",
     "@mariozechner/pi-tui": "^0.52.8",
     "@types/node": "^20.0.0",
     "typescript": "^5.3.3",

@@ -8,19 +8,19 @@ importers:
 
   .:
     dependencies:
+      '@sinclair/typebox':
+        specifier: ^0.34.48
+        version: 0.34.48
+      pi-diff-ui:
+        specifier: file:./packages/pi-diff-ui
+        version: file:packages/pi-diff-ui
+    devDependencies:
       '@mariozechner/pi-ai':
         specifier: latest
         version: 0.52.7(ws@8.19.0)(zod@3.25.76)
       '@mariozechner/pi-coding-agent':
         specifier: latest
         version: 0.52.7(ws@8.19.0)(zod@3.25.76)
-      '@sinclair/typebox':
-        specifier: ^0.34.48
-        version: 0.34.48
-      pi-diff-ui:
-        specifier: file:../pi-diff-ui
-        version: file:../pi-diff-ui
-    devDependencies:
       '@mariozechner/pi-tui':
         specifier: ^0.52.8
         version: 0.52.8
@@ -1366,8 +1366,8 @@ packages:
   pathval@1.1.1:
     resolution: {integrity: sha512-Dp6zGqpTdETdR63lehJYPeIOqpiNBNtc7BpWSLrOje7UaIsE5aY92r/AunQA7rsXvet3lrJ3JnZX29UPTKXyKQ==}
 
-  pi-diff-ui@file:../pi-diff-ui:
-    resolution: {directory: ../pi-diff-ui, type: directory}
+  pi-diff-ui@file:packages/pi-diff-ui:
+    resolution: {directory: packages/pi-diff-ui, type: directory}
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
@@ -3307,7 +3307,7 @@ snapshots:
 
   pathval@1.1.1: {}
 
-  pi-diff-ui@file:../pi-diff-ui:
+  pi-diff-ui@file:packages/pi-diff-ui:
     dependencies:
       diff: 7.0.0
 

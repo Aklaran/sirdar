@@ -9,7 +9,7 @@ The orchestrator extension is now fully wired and integrated. All components wor
 ### Component Initialization
 
 **Load Time (Extension Load)**
-- `BudgetTracker` - Initialized with `~/.pi/agent/extensions/orchestrator/data`
+- `BudgetTracker` - Initialized with `~/.pi/agent/data/sirdar`
 - `MemoryLogger` - Initialized with `~/.openclaw/workspace/memory`
 - Mutable references created for runtime-dependent components
 
@@ -199,7 +199,9 @@ BudgetTracker.save() - Append to history file
 ## File Structure
 
 ```
-~/repos/orchestrator/
+~/repos/sirdar/
+├── packages/
+│   └── pi-diff-ui/           # Vendored runtime library dependency
 ├── src/
 │   ├── index.ts              # Extension entry point (wiring)
 │   ├── types.ts              # Shared type definitions
@@ -223,7 +225,7 @@ BudgetTracker.save() - Append to history file
 ## Data Directories
 
 ### Budget History
-- **Location:** `~/.pi/agent/extensions/orchestrator/data/budget-history.jsonl`
+- **Location:** `~/.pi/agent/data/sirdar/budget-history.jsonl`
 - **Format:** JSONL (one JSON object per line)
 - **Schema:** `{ taskId, tier, costEstimate, timestamp }`
 - **Persistence:** Append-only, loaded on session_start

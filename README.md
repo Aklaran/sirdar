@@ -13,31 +13,40 @@ Multi-agent orchestration for [Pi](https://github.com/badlogic/pi-mono) with bud
 
 ## Installation
 
-### Option 1: Local Extension
+Sirdar is a **Pi package**. Install it through Pi's package system instead of copying source trees into `~/.pi/agent/extensions`.
+
+### Option 1: Install from git
 
 ```bash
-# Clone or copy to Pi extensions directory
-mkdir -p ~/.pi/agent/extensions
-cp -r ~/repos/orchestrator ~/.pi/agent/extensions/
-
-# Restart Pi - extension auto-loads
+pi install https://github.com/Aklaran/sirdar
 ```
 
-### Option 2: Project-Local
+### Option 2: Install from a local checkout
 
 ```bash
-# Copy to project
-mkdir -p .pi/extensions
-cp -r ~/repos/orchestrator .pi/extensions/
-
-# Extension loads when running Pi in this directory
+pi install /absolute/path/to/sirdar
 ```
 
-### Option 3: One-off Test
+### Option 3: Project-local install
 
 ```bash
-pi -e ~/repos/orchestrator/src/index.ts
+cd /path/to/project
+pi install -l /absolute/path/to/sirdar
 ```
+
+### Option 4: One-off test
+
+```bash
+pi -e /absolute/path/to/sirdar
+```
+
+## Packaging notes
+
+- `package.json -> pi.extensions` points Pi at `./src/index.ts`
+- `package.json -> pi.skills` points Pi at `./skills`, so the package includes the `orchestrator` skill too
+- `pi-diff-ui` is vendored under `packages/pi-diff-ui` as a normal library dependency
+- `pi-diff-ui` is **not** a Pi extension and must **not** be placed in `~/.pi/agent/extensions`
+- the vendored `pi-diff-ui` package includes committed `dist/` artifacts so git installs work without a dev-only build step
 
 ## Usage
 
@@ -169,7 +178,7 @@ This enables workflows where the parent can spawn multiple agents and react to t
 
 ```
 Extension Load
-  ├─ BudgetTracker (persisted to ~/.pi/agent/extensions/orchestrator/data/)
+  ├─ BudgetTracker (persisted to ~/.pi/agent/data/sirdar/)
   ├─ MemoryLogger (logs to ~/.openclaw/workspace/memory/)
   └─ Runtime component placeholders
 
@@ -199,7 +208,7 @@ session_start Event
 ## Data Storage
 
 ### Budget History
-- **Location:** `~/.pi/agent/extensions/orchestrator/data/budget-history.jsonl`
+- **Location:** `~/.pi/agent/data/sirdar/budget-history.jsonl`
 - **Format:** JSONL (append-only)
 - **Schema:** `{ taskId, tier, costEstimate, timestamp }`
 
@@ -220,7 +229,7 @@ session_start Event
 ### Setup
 
 ```bash
-cd ~/repos/orchestrator
+cd ~/repos/sirdar
 pnpm install
 ```
 
@@ -240,7 +249,7 @@ pnpm test --watch
 ### Project Structure
 
 ```
-orchestrator/
+sirdar/
 ├── src/
 │   ├── index.ts              # Extension entry point (wiring)
 │   ├── types.ts              # Shared type definitions
@@ -304,7 +313,7 @@ case "standard":
 
 Edit `src/index.ts` to change storage locations:
 ```typescript
-const dataDir = join(homedir(), ".pi", "agent", "extensions", "orchestrator", "data");
+const dataDir = process.env.SIRDAR_DATA_DIR ?? join(homedir(), ".pi", "agent", "data", "sirdar");
 const logDir = join(homedir(), ".openclaw", "workspace", "memory");
 ```
 

@@ -76,7 +76,7 @@ export default function orchestrator(pi: ExtensionAPI) {
   // 1. Initialize components that don't need runtime dependencies
   // ============================================================================
   
-  const dataDir = join(homedir(), ".pi", "agent", "extensions", "orchestrator", "data");
+  const dataDir = process.env.SIRDAR_DATA_DIR ?? join(homedir(), ".pi", "agent", "data", "sirdar");
   const logDir = join(homedir(), ".openclaw", "workspace", "memory");
 
   /**
